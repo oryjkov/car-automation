@@ -1,10 +1,8 @@
 esphome:
-  name: test
+  name: solar-charger-monitor
 
-esp32:
-  board: esp32dev
-  framework:
-    type: arduino
+esp8266:
+  board: esp8285
 
 # Enable logging
 logger:
@@ -32,8 +30,8 @@ external_components:
 
 uart:
   id: uart0
-  tx_pin: 21  # Not used! The communication is read-only
-  rx_pin: GPIO22
+  tx_pin: GPIO4  # Not used! The communication is read-only
+  rx_pin: GPIO2
   baud_rate: 19200
   rx_buffer_size: 256
 
