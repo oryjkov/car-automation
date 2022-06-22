@@ -1,5 +1,5 @@
 esphome:
-  name: bms
+  name: bms-esp32
 
 esp32:
   board: esp32dev
