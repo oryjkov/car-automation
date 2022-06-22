@@ -25,7 +25,7 @@ wifi:
     password: "***REMOVED***"
 
   manual_ip:
-    static_ip: 192.168.235.232
+    static_ip: 192.168.235.231
     gateway: 192.168.235.5
     subnet: 255.255.255.0
 
