@@ -23,6 +23,11 @@ wifi:
     ssid: ***REMOVED***
     password: "***REMOVED***"
 
+  manual_ip:
+    static_ip: 192.168.235.230
+    gateway: 192.168.235.5
+    subnet: 255.255.255.0
+
 captive_portal:
 
 external_components:
@@ -30,15 +35,15 @@ external_components:
 
 uart:
   id: uart0
-  tx_pin: GPIO4  # Not used! The communication is read-only
-  rx_pin: GPIO2
+  tx_pin: GPIO2  # Not used! The communication is read-only
+  rx_pin: GPIO4
   baud_rate: 19200
   rx_buffer_size: 256
 
 victron:
   id: victron0
   uart_id: uart0
-  throttle: 20s
+  throttle: 60s
 
 sensor:
   - platform: victron
@@ -49,5 +54,11 @@ sensor:
       name: "Battery voltage"
     battery_current:
       name: "Battery current"
+    panel_power:
+      name: "Panel power"
+    instantaneous_power:
+      name: "Power"
+    yield_today:
+      name: "Yield today"
 
    
