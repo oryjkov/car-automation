@@ -47,26 +47,8 @@ sensor:
       name: "Battery Current"
     battery_level:
       name: "Battery Level"
-    max_cell_voltage:
-      name: "Max Cell Voltage"
-    max_cell_voltage_number:
-      name: "Max Cell Voltage Number"
-    min_cell_voltage:
-      name: "Min Cell Voltage"
-    min_cell_voltage_number:
-      name: "Min Cell Voltage Number"
-    max_temperature:
-      name: "Max Temperature"
-    max_temperature_probe_number:
-      name: "Max Temperature Probe Number"
-    min_temperature:
-      name: "Min Temperature"
-    min_temperature_probe_number:
-      name: "Min Temperature Probe Number"
     remaining_capacity:
       name: "Remaining Capacity"
-    cells_number:
-      name: "Cells Number"
     temperature_1:
       name: "Temperature 1"
     cell_1_voltage:
