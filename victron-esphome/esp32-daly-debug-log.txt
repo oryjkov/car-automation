@@ -1,0 +1,24 @@
+[19:50:49][D][uart_debug:158]: >>> "\xA5\x80\x90\b\x00\x00\x00\x00\x00\x00\x00\x00\xBD\xA5\x80\x91\b\x00\x00\x00\x00\x00\x00\x00\x00\xBE\xA5\x80\x92\b\x00\x00\x00\x00\x00\x00\x00\x00\xBF\xA5\x80\x93\b\x00\x00\x00\x00\x00\x00\x00\x00\xC0\xA5\x80\x94\b\x00\x00\x00\x00\x00\x00\x00\x00\xC1\xA5\x80\x95\b\x00\x00\x00\x00\x00\x00\x00\x00\xC2\xA5\x80\x96\b\x00\x00\x00\x00\x00\x00\x00\x00\xC3"
+[19:50:49][D][sensor:125]: 'Cells Number': Sending state 4.00000  with 0 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Cell 1 Voltage': Sending state 3.32600 V with 3 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Cell 2 Voltage': Sending state 3.33100 V with 3 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Cell 3 Voltage': Sending state 3.33200 V with 3 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Cell 4 Voltage': Sending state 3.33100 V with 3 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Temperature 1': Sending state 24.00000 °C with 0 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Battery Voltage': Sending state 13.30000 V with 1 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Battery Current': Sending state 0.00000 A with 1 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Battery Level': Sending state 98.10000 % with 1 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Max Cell Voltage': Sending state 3.33200 V with 2 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Max Cell Voltage Number': Sending state 3.00000  with 0 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Min Cell Voltage': Sending state 3.32700 V with 2 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Min Cell Voltage Number': Sending state 1.00000  with 0 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Max Temperature': Sending state 24.00000 °C with 0 decimals of accuracy
+[19:50:49][D][sensor:125]: 'Max Temperature Probe Number': Sending state 1.00000  with 0 decimals of accuracy
+[19:50:50][D][sensor:125]: 'Min Temperature': Sending state 24.00000 °C with 0 decimals of accuracy
+[19:50:50][D][sensor:125]: 'Min Temperature Probe Number': Sending state 1.00000  with 0 decimals of accuracy
+[19:50:50][D][text_sensor:067]: 'BMS Status': Sending state 'Stationary'
+[19:50:50][D][binary_sensor:036]: 'Charging MOS': Sending state ON
+[19:50:50][D][binary_sensor:036]: 'Discharging MOS': Sending state ON
+[19:50:50][D][sensor:125]: 'Remaining Capacity': Sending state 294.29999 Ah with 2 decimals of accuracy
+[19:50:50][D][uart_debug:158]: <<< "\x9C_\xA5\x01\x94\b\x04\x01\x00\x00\x00\x00\x02\x9C\xE5\xA5\x01\x95\b\x01\f\xFE\r\x03\r\x04\x9C\v\xA5\x01\x95\b\x02\r\x03\x00\x00\r\x04\x9C\x02\xA5\x01\x96\b\x01@\x00\x00\x00\r\x04\x9C2\xA5\x01\x90\b\x00\x85\x00\x00u0\x03\xD5@\xA5\x01\x91\b\r\x04\x03\f\xFF\x01\x03\xD57\xA5\x01\x92\b@\x01@\x01\xFF\x01\x03\xD5\x9A\xA5\x01\x93\b\x00\x01\x01\x10\x00\x04}\x9Cp"
+
