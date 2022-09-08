@@ -33,9 +33,24 @@ captive_portal:
 external_components:
   - source: github://KinDR007/VictronMPPT-ESPHOME@main
 
+light:
+  - platform: status_led
+    name: "Status LED"
+    pin:
+      number: GPIO2
+      inverted: true
+    effects:
+      - strobe:
+          name: "Strobe"
+          colors:
+            - state: True
+              duration: 300ms
+            - state: False
+              duration: 1000ms
+
 uart:
   id: uart0
-  tx_pin: GPIO2  # Not used! The communication is read-only
+  tx_pin: GPIO13  # Not used! The communication is read-only
   rx_pin: GPIO4
   baud_rate: 19200
   rx_buffer_size: 256
@@ -56,9 +71,5 @@ sensor:
       name: "Battery current"
     panel_power:
       name: "Panel power"
-    instantaneous_power:
-      name: "Power"
     yield_today:
       name: "Yield today"
-
-   

@@ -31,6 +31,12 @@ wifi:
     subnet: 255.255.255.0
 
 captive_portal:
+
+status_led:
+  pin:
+    number: GPIO2
+    inverted: true
+
 uart:
   tx_pin: GPIO1
   rx_pin: GPIO3
