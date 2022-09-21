@@ -60,6 +60,17 @@ button:
           can_id: 0x531
           data: [0x00, 0x00, 0x00, 0x00]
 
+  - platform: template
+    # Triggers the system to start sending its state on the canbus for a few seconds.
+    name: "refresh"
+    on_press:
+      - logger.log:
+          format: "refresh"
+          level: INFO
+      - canbus.send:
+          use_extended_id: true
+          can_id: 0x46
+          data: [0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 canbus:
   - platform: esp32_can
