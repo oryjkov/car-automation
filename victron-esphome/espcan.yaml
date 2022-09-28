@@ -41,6 +41,8 @@ binary_sensor:
     id: "door_light"
 
 button:
+  - platform: restart
+    name: "Restart ESPCan"
   - platform: template
     name: "fridge on"
     on_press:
@@ -71,6 +73,18 @@ button:
           use_extended_id: true
           can_id: 0x46
           data: [0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    # Every 5 minutes.
+    on_time:
+      - cron: '* /5 * * * *'
+        then:
+          - canbus.send:
+              use_extended_id: true
+              can_id: 0x46
+              data: [0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
 canbus:
   - platform: esp32_can
