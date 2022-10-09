@@ -998,7 +998,7 @@
     (uuid 9551a8b5-e833-4816-932e-736ec99793bc)
     (property "Reference" "J2" (id 0) (at 66.04 113.1402 0))
     (property "Value" "Conn_CAN_TAP" (id 1) (at 66.04 115.6771 0))
-    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical" (id 2) (at 64.77 128.27 0)
+    (property "Footprint" "footprints:VW T20d connector" (id 2) (at 64.77 128.27 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 64.77 128.27 0)
@@ -1066,7 +1066,7 @@
     (uuid e312b316-f2c6-4531-adf7-356b3f2cbc97)
     (property "Reference" "J3" (id 0) (at 97.79 113.1402 0))
     (property "Value" "Conn_CAN_BRIDGE" (id 1) (at 97.79 115.6771 0))
-    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical" (id 2) (at 96.52 128.27 0)
+    (property "Footprint" "footprints:VW T20d connector" (id 2) (at 96.52 128.27 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "~" (id 3) (at 96.52 128.27 0)
@@ -1177,10 +1177,10 @@
       (reference "J1") (unit 1) (value "Conn_CAN_IN") (footprint "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical")
     )
     (path "/9551a8b5-e833-4816-932e-736ec99793bc"
-      (reference "J2") (unit 1) (value "Conn_CAN_TAP") (footprint "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical")
+      (reference "J2") (unit 1) (value "Conn_CAN_TAP") (footprint "footprints:VW T20d connector")
     )
     (path "/e312b316-f2c6-4531-adf7-356b3f2cbc97"
-      (reference "J3") (unit 1) (value "Conn_CAN_BRIDGE") (footprint "Connector_PinHeader_2.54mm:PinHeader_2x10_P2.54mm_Vertical")
+      (reference "J3") (unit 1) (value "Conn_CAN_BRIDGE") (footprint "footprints:VW T20d connector")
     )
     (path "/1c1b3537-8c52-4a3f-95b6-d0a8b939106e"
       (reference "J4") (unit 1) (value "Conn_01x02") (footprint "Connector_JST:JST_EH_B2B-EH-A_1x02_P2.50mm_Vertical")
