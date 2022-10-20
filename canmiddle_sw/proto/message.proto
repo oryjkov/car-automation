@@ -1,0 +1,7 @@
+syntax = "proto2";
+
+message CanMessage {
+    optional uint32 prop = 1;
+    optional bool extended = 2;
+    repeated bytes value = 3;
+}
