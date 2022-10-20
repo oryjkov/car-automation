@@ -5,6 +5,8 @@
 #include <pb_encode.h>
 #include <pb_decode.h>
 
+#include "message.pb.h"
+
 Preferences pref;
 
 enum Role: uint32_t {
@@ -63,6 +65,67 @@ void setup() {
   }
 }
 
+// Sends msg on Serial2.
+size_t send_can_message(const CanMessage &msg) {
+  uint8_t buffer[255];
+  bool status;
+  size_t message_length;
+
+  pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
+
+  status = pb_encode(&stream, CanMessage_fields, &msg);
+  if (!status) {
+    Serial.printf("Encoding failed: %s\r\n", PB_GET_ERROR(&stream));
+    return 0;
+  }
+  message_length = stream.bytes_written;
+
+  if (message_length <= 0) {
+    Serial.println("zero length message");
+    return 0;
+  }
+  if (message_length > 255) {
+    Serial.println("message too long");
+    return 0;
+  }
+
+  size_t bytes_written = Serial2.write(static_cast<uint8_t>(message_length));
+  if (bytes_written < 1) {
+    Serial.printf("write length unexpected: read %d bytes, want 1\r\n", bytes_written);
+    return 0;
+  }
+  bytes_written = Serial2.write(buffer, message_length);
+  if (bytes_written < message_length) {
+    Serial.printf("write length unexpected: wrote %d bytes, want %d\r\n", bytes_written, message_length);
+    return 0;
+  }
+  Serial2.flush(true);
+  return message_length;
+}
+
+size_t read_can_message(CanMessage *msg) {
+  uint8_t buffer[255];
+  bool status;
+  uint8_t message_length;
+
+  size_t bytes_read;
+  bytes_read = Serial2.read(&message_length, 1);
+  if (bytes_read < 1) {
+    Serial.printf("read length unexpected: read %d bytes, want 1\r\n", bytes_read);
+    return 0;
+  }
+  bytes_read = Serial2.read(buffer, message_length);
+  if (bytes_read < message_length) {
+    Serial.printf("read length unexpected: read %d bytes, want %d\r\n", bytes_read, message_length);
+    return 0;
+  }
+
+  pb_istream_t stream = pb_istream_from_buffer(buffer, message_length);
+        
+  status = pb_decode(&stream, CanMessage_fields, msg);
+
+  return message_length;
+}
 
 void loop_slave() {
 #if 0
@@ -89,20 +152,29 @@ void loop_slave() {
   }
 #endif
   if (millis() % 1000 == 0) {
+    CanMessage msg = CanMessage_init_zero;
+
+    msg.prop = 0x07;
+    msg.has_prop = true;
+    msg.has_value = true;
+    msg.value.size = 0x02;
+    msg.value.bytes[0] = 'h';
+    msg.value.bytes[1] = 'i';
+
     digitalWrite(LED_BUILTIN, 1);
-    Serial2.println("123");
+    int cnt = send_can_message(msg);
     digitalWrite(LED_BUILTIN, 0);
+    Serial.printf("sent message of %d bytes\r\n", cnt);
+
     delay(1);
   }
 }
 
 void loop_master() {
-  int cnt = 0;
-  while (Serial2.available()) {
-    cnt += 1;
-    Serial2.read();
-  }
-  if (cnt > 0) {
+  if (Serial2.available()) {
+    int cnt = 0;
+    CanMessage msg;
+    cnt = read_can_message(&msg);
     Serial.printf("read %d bytes\r\n", cnt);
   }
 }

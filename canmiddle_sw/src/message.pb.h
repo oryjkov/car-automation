@@ -10,12 +10,14 @@
 #endif
 
 /* Struct definitions */
+typedef PB_BYTES_ARRAY_T(8) CanMessage_value_t;
 typedef struct _CanMessage { 
     bool has_prop;
     uint32_t prop;
     bool has_extended;
     bool extended;
-    pb_callback_t value;
+    bool has_value;
+    CanMessage_value_t value;
 } CanMessage;
 
 
@@ -24,8 +26,8 @@ extern "C" {
 #endif
 
 /* Initializer values for message structs */
-#define CanMessage_init_default                  {false, 0, false, 0, {{NULL}, NULL}}
-#define CanMessage_init_zero                     {false, 0, false, 0, {{NULL}, NULL}}
+#define CanMessage_init_default                  {false, 0, false, 0, false, {0, {0}}}
+#define CanMessage_init_zero                     {false, 0, false, 0, false, {0, {0}}}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define CanMessage_prop_tag                      1
@@ -36,8 +38,8 @@ extern "C" {
 #define CanMessage_FIELDLIST(X, a) \
 X(a, STATIC,   OPTIONAL, UINT32,   prop,              1) \
 X(a, STATIC,   OPTIONAL, BOOL,     extended,          2) \
-X(a, CALLBACK, REPEATED, BYTES,    value,             3)
-#define CanMessage_CALLBACK pb_default_field_callback
+X(a, STATIC,   OPTIONAL, BYTES,    value,             3)
+#define CanMessage_CALLBACK NULL
 #define CanMessage_DEFAULT NULL
 
 extern const pb_msgdesc_t CanMessage_msg;
@@ -46,7 +48,7 @@ extern const pb_msgdesc_t CanMessage_msg;
 #define CanMessage_fields &CanMessage_msg
 
 /* Maximum encoded size of messages (where known) */
-/* CanMessage_size depends on runtime parameters */
+#define CanMessage_size                          18
 
 #ifdef __cplusplus
 } /* extern "C" */

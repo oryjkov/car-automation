@@ -1,7 +1,9 @@
 syntax = "proto2";
 
+import "nanopb.proto";
+
 message CanMessage {
     optional uint32 prop = 1;
     optional bool extended = 2;
-    repeated bytes value = 3;
+    optional bytes value = 3 [(nanopb).max_size = 8];
 }
