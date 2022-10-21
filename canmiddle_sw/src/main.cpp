@@ -12,6 +12,8 @@ Preferences pref;
 enum Role: uint32_t {
   MASTER=1,
   SLAVE=2,
+  // Sends on CAN and prints what it gets on CAN.
+  DEBUGGER=3,
 };
 
 Role r;
@@ -31,7 +33,6 @@ void program_as(Role r) {
   pref.end();
 
   Serial.printf("programmed as: %d\r\n", r);
-  ESP.restart();
 }
 
 void setup() {
@@ -43,7 +44,7 @@ void setup() {
   pref.begin("canmiddle", true);
   r = static_cast<Role>(pref.getUInt("role", 0));
 
-  Serial2.begin(9600);
+  Serial2.begin(500000);
 
   CAN.setPins(GPIO_NUM_26, GPIO_NUM_25);
   if (!CAN.begin(500E3)) {
@@ -59,6 +60,8 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1);
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
+  } else if (r == DEBUGGER) {
+    digitalWrite(LED_BUILTIN, 0);
   } else {
     Serial.printf("role unknown: %d\n", r);
     while(1) {}
@@ -66,7 +69,7 @@ void setup() {
 }
 
 // Sends msg on Serial2.
-size_t send_can_message(const CanMessage &msg) {
+size_t send_can_serial(const CanMessage &msg) {
   uint8_t buffer[255];
   bool status;
   size_t message_length;
@@ -123,82 +126,194 @@ size_t read_can_message(CanMessage *msg) {
   pb_istream_t stream = pb_istream_from_buffer(buffer, message_length);
         
   status = pb_decode(&stream, CanMessage_fields, msg);
+  if (!status) {
+    Serial.printf("Decoding failed: %s\r\n", PB_GET_ERROR(&stream));
+    return 0;
+  }
 
   return message_length;
 }
 
+bool CAN_to_msg(CanMessage *msg) {
+  if (CAN.packetExtended()) {
+    msg->has_extended = true;
+    msg->extended = true;
+    Serial2.print("extended, ");
+  }
+  msg->has_prop = true;
+  msg->prop = CAN.packetId();
+  msg->has_value = true;
+  msg->value.size = CAN.packetDlc();
+  size_t bytes_read = 0;
+  CAN.readBytes(msg->value.bytes, msg->value.size);
+ 
+  return true;
+}
+
+void dump_msg(const CanMessage &msg) {
+  if (msg.has_prop) {
+    Serial.printf("prop: %d, ", msg.prop);
+  }
+  if (msg.has_extended) {
+    Serial.printf("ext: %d, ", msg.extended);
+  }
+  if (msg.has_value) {
+    Serial.printf("data_len: %d, data: [ ", msg.value.size);
+    for (int i = 0; i < msg.value.size; i++) {
+      Serial.printf("0x%x, ", msg.value.bytes[i]);
+    }
+    Serial.print("]");
+  }
+  Serial.println();
+}
+
+bool send_can_can(const CanMessage &msg) {
+  if (!msg.has_prop) {
+    Serial.println("can property is required");
+    return false;
+  }
+  if (!msg.has_value) {
+    Serial.println("can value is required");
+    return false;
+  }
+  if (msg.value.size < 1  || msg.value.size > 8) {
+    Serial.println("can value size is wrong");
+    return false;
+  }
+
+  if (msg.extended) {
+    CAN.beginExtendedPacket(msg.prop, msg.value.size, false);
+  } else {
+    CAN.beginPacket(msg.prop);
+  }
+  CAN.write(msg.value.bytes, msg.value.size);
+  CAN.endPacket();
+
+  return true;
+}
+
 void loop_slave() {
-#if 0
   int packetSize = CAN.parsePacket();
 
-  if (packetSize) {
-    Serial.print("received: ");
-    Serial.println(packetSize);
+  if (packetSize > 0) {
+    CanMessage msg = CanMessage_init_zero;
+    CAN_to_msg(&msg);
 
-    if (CAN.packetExtended()) {
-      Serial2.print("extended, ");
-    }
-    Serial2.print("pkt id: ");
-    Serial2.print(CAN.packetId());
-    Serial2.print(", pkt len: ");
-    Serial2.print(CAN.packetDlc());
-    Serial2.print(", data: ");
-    while(CAN.available()) {
-      Serial2.printf("0x%x", CAN.read());
-    }
-    Serial2.println();
-  }
-  if (Serial2.available()) {
-  }
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    int cnt = send_can_serial(msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+#if DEBUG
+    Serial.print("message from CAN: ");
+    dump_msg(msg);
 #endif
-  if (millis() % 1000 == 0) {
+  }
+
+  if (Serial2.available()) {
+    CanMessage msg;
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    size_t cnt = read_can_message(&msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    if (cnt <= 0) {
+      Serial.println("zero len message");
+      return;
+    }
+    bool status = send_can_can(msg);
+    if (!status) {
+      Serial.println("can send failed");
+      return;
+    }
+#if DEBUG
+    Serial.print("message from Serial: ");
+    dump_msg(msg);
+#endif
+  }
+}
+
+uint32_t gen_send_millis = 0;
+void loop_debugger() {
+  int packetSize = CAN.parsePacket();
+
+  if (packetSize > 0) {
+    CanMessage msg = CanMessage_init_zero;
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    CAN_to_msg(&msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+
+    Serial.print("message from CAN: ");
+    dump_msg(msg);
+  }
+
+  if (millis() % 1000 == 0 && millis() != gen_send_millis) {
     CanMessage msg = CanMessage_init_zero;
 
-    msg.prop = 0x07;
+    msg.prop = 0x11;
     msg.has_prop = true;
     msg.has_value = true;
-    msg.value.size = 0x02;
-    msg.value.bytes[0] = 'h';
-    msg.value.bytes[1] = 'i';
+    msg.value.size = 8;
+    msg.value.bytes[0] = 'g';
+    msg.value.bytes[1] = 'e';
+    msg.value.bytes[2] = 'n';
+    msg.value.bytes[3] = 'e';
+    msg.value.bytes[4] = 'r';
+    msg.value.bytes[5] = 'a';
+    msg.value.bytes[6] = 't';
+    msg.value.bytes[7] = 'o';
 
-    digitalWrite(LED_BUILTIN, 1);
-    int cnt = send_can_message(msg);
-    digitalWrite(LED_BUILTIN, 0);
-    Serial.printf("sent message of %d bytes\r\n", cnt);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    bool status = send_can_can(msg);
+    if (!status) {
+      Serial.println("can send failed");
+    } else {
+      Serial.println("can send success");
+    }
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
 
-    delay(1);
+    gen_send_millis=millis();
   }
 }
 
 void loop_master() {
+  int packetSize = CAN.parsePacket();
+
+  if (packetSize > 0) {
+    CanMessage msg = CanMessage_init_zero;
+
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    CAN_to_msg(&msg);
+    int cnt = send_can_serial(msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    Serial.print("message from CAN: ");
+    dump_msg(msg);
+  }
+
   if (Serial2.available()) {
     int cnt = 0;
     CanMessage msg;
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
     cnt = read_can_message(&msg);
-    Serial.printf("read %d bytes\r\n", cnt);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    if (cnt <= 0) {
+      Serial.println("zero len message");
+      return;
+    }
+    bool status = send_can_can(msg);
+    if (!status) {
+      Serial.println("can send failed");
+      return;
+    }
+    Serial.print("message from Serial: ");
+    dump_msg(msg);
   }
 }
-
-#if 0
-void loop_sender() {
-  Serial.println("sending packet");
-  CAN.beginPacket(0x12);
-  CAN.write('h');
-  CAN.write('e');
-  CAN.write('l');
-  CAN.write('l');
-  CAN.write('o');
-  CAN.endPacket();
-  Serial.println("packet sent");
-  delay(1000);
-  digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-}
-#endif
 
 void loop() {
   if (r == MASTER) {
     loop_master();
-  } else {
+  } else if (r == SLAVE) {
     loop_slave();
+  } else if (r == DEBUGGER) {
+    loop_debugger();
+  } else {
+    while(1) {}
   }
 }
