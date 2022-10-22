@@ -20,6 +20,18 @@ typedef struct _CanMessage {
     CanMessage_value_t value;
 } CanMessage;
 
+typedef struct _Request { 
+    bool has_message_in;
+    CanMessage message_in;
+    bool placeholder;
+} Request;
+
+typedef struct _Response { 
+    bool has_message_out;
+    CanMessage message_out;
+    bool placeholder;
+} Response;
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,12 +39,20 @@ extern "C" {
 
 /* Initializer values for message structs */
 #define CanMessage_init_default                  {false, 0, false, 0, false, {0, {0}}}
+#define Request_init_default                     {false, CanMessage_init_default, 0}
+#define Response_init_default                    {false, CanMessage_init_default, 0}
 #define CanMessage_init_zero                     {false, 0, false, 0, false, {0, {0}}}
+#define Request_init_zero                        {false, CanMessage_init_zero, 0}
+#define Response_init_zero                       {false, CanMessage_init_zero, 0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define CanMessage_prop_tag                      1
 #define CanMessage_extended_tag                  2
 #define CanMessage_value_tag                     3
+#define Request_message_in_tag                   1
+#define Request_placeholder_tag                  2
+#define Response_message_out_tag                 1
+#define Response_placeholder_tag                 2
 
 /* Struct field encoding specification for nanopb */
 #define CanMessage_FIELDLIST(X, a) \
@@ -42,13 +62,33 @@ X(a, STATIC,   OPTIONAL, BYTES,    value,             3)
 #define CanMessage_CALLBACK NULL
 #define CanMessage_DEFAULT NULL
 
+#define Request_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  message_in,        1) \
+X(a, STATIC,   REQUIRED, BOOL,     placeholder,       2)
+#define Request_CALLBACK NULL
+#define Request_DEFAULT NULL
+#define Request_message_in_MSGTYPE CanMessage
+
+#define Response_FIELDLIST(X, a) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  message_out,       1) \
+X(a, STATIC,   REQUIRED, BOOL,     placeholder,       2)
+#define Response_CALLBACK NULL
+#define Response_DEFAULT NULL
+#define Response_message_out_MSGTYPE CanMessage
+
 extern const pb_msgdesc_t CanMessage_msg;
+extern const pb_msgdesc_t Request_msg;
+extern const pb_msgdesc_t Response_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define CanMessage_fields &CanMessage_msg
+#define Request_fields &Request_msg
+#define Response_fields &Response_msg
 
 /* Maximum encoded size of messages (where known) */
 #define CanMessage_size                          18
+#define Request_size                             22
+#define Response_size                            22
 
 #ifdef __cplusplus
 } /* extern "C" */

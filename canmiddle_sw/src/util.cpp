@@ -22,46 +22,16 @@ void print_stats(uint32_t period_ms) {
   }
 }
 
-// Sends msg on Serial2.
-size_t send_over_serial(const CanMessage &msg) {
-  stats.ser_tx += 1;
-  stats.ser_tx_err += 1;
-
-  uint8_t buffer[255];
-  bool status;
-  size_t message_length;
-
-  pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
-
-  status = pb_encode(&stream, CanMessage_fields, &msg);
-  if (!status) {
-    Serial.printf("Encoding failed: %s\r\n", PB_GET_ERROR(&stream));
-    return 0;
+bool issue_rpc(const Request &req, Response *rep) {
+  if (!send_over_serial(req, Request_fields)) {
+    return false;
   }
-  message_length = stream.bytes_written;
-
-  if (message_length <= 0) {
-    Serial.println("zero length message");
-    return 0;
+  if (!recv_over_serial(rep, Response_fields)) {
+    delay(10);
+    Serial2.flush();
+    return false;
   }
-  if (message_length > 255) {
-    Serial.println("message too long");
-    return 0;
-  }
-
-  size_t bytes_written = Serial2.write(static_cast<uint8_t>(message_length));
-  if (bytes_written < 1) {
-    Serial.printf("write length unexpected: read %d bytes, want 1\r\n", bytes_written);
-    return 0;
-  }
-  bytes_written = Serial2.write(buffer, message_length);
-  if (bytes_written < message_length) {
-    Serial.printf("write length unexpected: wrote %d bytes, want %d\r\n", bytes_written, message_length);
-    return 0;
-  }
-  Serial2.flush(true);
-  stats.ser_tx_err -= 1;
-  return message_length;
+  return true;
 }
 
 bool send_over_can(const CanMessage &msg) {
@@ -93,37 +63,6 @@ bool send_over_can(const CanMessage &msg) {
 
   stats.can_tx_err -= 1;
   return true;
-}
-
-size_t recv_over_serial(CanMessage *msg) {
-  stats.ser_rx += 1;
-  stats.ser_rx_err += 1;
-  uint8_t buffer[255];
-  bool status;
-  uint8_t message_length;
-
-  size_t bytes_read;
-  bytes_read = Serial2.read(&message_length, 1);
-  if (bytes_read < 1) {
-    Serial.printf("read length unexpected: read %d bytes, want 1\r\n", bytes_read);
-    return 0;
-  }
-  bytes_read = Serial2.read(buffer, message_length);
-  if (bytes_read < message_length) {
-    Serial.printf("read length unexpected: read %d bytes, want %d\r\n", bytes_read, message_length);
-    return 0;
-  }
-
-  pb_istream_t stream = pb_istream_from_buffer(buffer, message_length);
-        
-  status = pb_decode(&stream, CanMessage_fields, msg);
-  if (!status) {
-    Serial.printf("Decoding failed: %s\r\n", PB_GET_ERROR(&stream));
-    return 0;
-  }
-
-  stats.ser_rx_err -= 1;
-  return message_length;
 }
 
 
@@ -165,4 +104,3 @@ void dump_msg(const CanMessage &msg) {
   }
   Serial.println();
 }
-

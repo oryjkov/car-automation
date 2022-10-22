@@ -7,3 +7,15 @@ message CanMessage {
     optional bool extended = 2;
     optional bytes value = 3 [(nanopb).max_size = 8];
 }
+
+message Request {
+    optional CanMessage message_in = 1;
+    // Placeholder to avoid sending lenght 1 messages.
+    required bool placeholder = 2;
+}
+
+message Response {
+    optional CanMessage message_out = 1;
+    // Placeholder to avoid sending lenght 0 messages.
+    required bool placeholder = 2;
+}

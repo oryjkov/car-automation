@@ -90,46 +90,6 @@ void setup() {
   }
 }
 
-void loop_slave() {
-  print_stats(10000);
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    CanMessage msg = CanMessage_init_zero;
-    if (!recv_over_can(&msg)) {
-      return;
-    }
-
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    send_over_serial(msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-#if DEBUG
-    Serial.print("message from CAN: ");
-    dump_msg(msg);
-#endif
-  }
-
-  if (Serial2.available()) {
-    CanMessage msg;
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    size_t cnt = recv_over_serial(&msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    if (cnt <= 0) {
-      //Serial.println("zero len message");
-      return;
-    }
-    bool status = send_over_can(msg);
-    if (!status) {
-      //Serial.println("can send failed");
-      return;
-    }
-#if DEBUG
-    Serial.print("message from Serial: ");
-    dump_msg(msg);
-#endif
-  }
-}
-
 uint32_t last_send_ms = 0;
 void loop_debugger() {
   print_stats(1000);
@@ -188,33 +148,66 @@ void loop_mirror(uint32_t parity) {
 void loop_master() {
   print_stats(10000);
 
+  Request req = Request_init_zero;
+  Response rep = Response_init_zero;
+
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
-    CanMessage msg = CanMessage_init_zero;
-
-    if (!recv_over_can(&msg)) {
+    req.has_message_in = true;
+    if (!recv_over_can(&req.message_in)) {
       return;
     }
-    send_over_serial(msg);
   }
 
-  if (Serial2.available()) {
-    int cnt = 0;
-    CanMessage msg;
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    cnt = recv_over_serial(&msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    if (cnt <= 0) {
-      Serial.println("zero len message");
-      return;
-    }
-    bool status = send_over_can(msg);
+  if (!issue_rpc(req, &rep)) {
+    return;
+  }
+
+  if (rep.has_message_out) {
+    bool status = send_over_can(rep.message_out);
     if (!status) {
       Serial.println("can send failed");
       return;
     }
   }
 }
+
+CanMessage msg = CanMessage_init_zero;
+bool has_message = false;
+uint32_t lost_messages = 0;
+
+void loop_slave() {
+  print_stats(10000);
+
+  int packetSize = CAN.parsePacket();
+  if (packetSize > 0) {
+    if (recv_over_can(&msg)) {
+      if (has_message) {
+        lost_messages += 1;
+      }
+      has_message = true;
+    }
+  }
+
+  if (Serial2.available()) {
+    Request req = Request_init_zero;
+    Response rep = Response_init_zero;
+    if (!recv_over_serial(&req, Request_fields)) {
+      return;
+    }
+    if (has_message) {
+      memcpy(&rep.message_out, &msg, sizeof(msg));
+      rep.has_message_out = true;
+      has_message = false;
+    }
+    send_over_serial(rep, Response_fields);
+
+    if (req.has_message_in) {
+      send_over_can(msg);
+    }
+  }
+}
+
 
 void loop() {
   if (r == MASTER) {
