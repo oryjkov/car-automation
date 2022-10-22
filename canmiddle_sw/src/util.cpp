@@ -7,8 +7,26 @@
 #include "message.pb.h"
 #include "util.h"
 
+uint32_t stats_print_ms = 0;
+void print_stats(uint32_t period_ms) {
+  if (millis() > stats_print_ms + period_ms) {
+    stats_print_ms = millis();
+    Serial.printf("[%08d] can: tx/err tx, rx/err rx: %d/%d, %d/%d",
+     stats_print_ms, stats.can_tx, stats.can_tx_err, stats.can_rx, stats.can_rx_err);
+    if (stats.ser_tx > 0 || stats.ser_rx > 0) {
+      Serial.printf(", ser: tx/err tx, rx/err rx: %d/%d, %d/%d\r\n",
+      stats.ser_tx, stats.ser_tx_err, stats.ser_rx, stats.ser_rx_err);
+    } else {
+      Serial.println();
+    }
+  }
+}
+
 // Sends msg on Serial2.
 size_t send_over_serial(const CanMessage &msg) {
+  stats.ser_tx += 1;
+  stats.ser_tx_err += 1;
+
   uint8_t buffer[255];
   bool status;
   size_t message_length;
@@ -42,10 +60,14 @@ size_t send_over_serial(const CanMessage &msg) {
     return 0;
   }
   Serial2.flush(true);
+  stats.ser_tx_err -= 1;
   return message_length;
 }
 
 bool send_over_can(const CanMessage &msg) {
+  stats.can_tx += 1;
+  stats.can_tx_err += 1;
+
   if (!msg.has_prop) {
     Serial.println("can property is required");
     return false;
@@ -65,10 +87,17 @@ bool send_over_can(const CanMessage &msg) {
     CAN.beginPacket(msg.prop, msg.value.size, false);
   }
   CAN.write(msg.value.bytes, msg.value.size);
-  return CAN.endPacket() == 1;
+  if (CAN.endPacket() != 1) {
+    return false;
+  };
+
+  stats.can_tx_err -= 1;
+  return true;
 }
 
 size_t recv_over_serial(CanMessage *msg) {
+  stats.ser_rx += 1;
+  stats.ser_rx_err += 1;
   uint8_t buffer[255];
   bool status;
   uint8_t message_length;
@@ -93,11 +122,14 @@ size_t recv_over_serial(CanMessage *msg) {
     return 0;
   }
 
+  stats.ser_rx_err -= 1;
   return message_length;
 }
 
 
 bool recv_over_can(CanMessage *msg) {
+  stats.can_rx += 1;
+  stats.can_rx_err += 1;
   if (CAN.packetExtended()) {
     msg->has_extended = true;
     msg->extended = true;
@@ -108,8 +140,12 @@ bool recv_over_can(CanMessage *msg) {
   msg->has_value = true;
   msg->value.size = CAN.packetDlc();
   size_t bytes_read = 0;
-  CAN.readBytes(msg->value.bytes, msg->value.size);
+  bytes_read = CAN.readBytes(msg->value.bytes, msg->value.size);
+  if (bytes_read != msg->value.size) {
+    return false;
+  }
  
+  stats.can_rx_err -= 1;
   return true;
 }
 

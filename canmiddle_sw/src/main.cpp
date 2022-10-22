@@ -37,6 +37,21 @@ void program_as(Role r) {
   Serial.printf("programmed as: %d\r\n", r);
 }
 
+void make_message(CanMessage *msg) {
+  msg->prop = 0x11;
+  msg->has_prop = true;
+  msg->has_value = true;
+  msg->value.size = 8;
+  msg->value.bytes[0] = 'g';
+  msg->value.bytes[1] = 'e';
+  msg->value.bytes[2] = 'n';
+  msg->value.bytes[3] = 'e';
+  msg->value.bytes[4] = 'r';
+  msg->value.bytes[5] = 'a';
+  msg->value.bytes[6] = 't';
+  msg->value.bytes[7] = 'o';
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("serial port initialized");
@@ -75,46 +90,18 @@ void setup() {
   }
 }
 
-struct {
-  uint32_t can_tx;
-  uint32_t can_rx;
-  uint32_t can_tx_err;
-  uint32_t can_rx_err;
-
-  uint32_t ser_tx;
-  uint32_t ser_tx_err;
-  uint32_t ser_rx;
-  uint32_t ser_rx_err;
-} stats;
-uint32_t stats_print_ms = 0;
-void print_stats(uint32_t period_ms) {
-  if (millis() > stats_print_ms + period_ms) {
-    stats_print_ms = millis();
-    Serial.printf("can: tx/err tx, rx/err rx: %d/%d, %d/%d\r\n",
-     stats.can_tx, stats.can_tx_err, stats.can_rx, stats.can_rx_err);
-    if (stats.ser_tx > 0 || stats.ser_rx > 0) {
-      Serial.printf("ser: tx/err tx, rx/err rx: %d/%d, %d/%d\r\n",
-      stats.ser_tx, stats.ser_tx_err, stats.ser_rx, stats.ser_rx_err);
-    }
-  }
-}
-
-
 void loop_slave() {
-  int packetSize = CAN.parsePacket();
+  print_stats(10000);
 
+  int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
     CanMessage msg = CanMessage_init_zero;
-    stats.can_rx += 1;
     if (!recv_over_can(&msg)) {
-      stats.can_rx_err += 1;
+      return;
     }
 
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.ser_tx += 1;
-    if (send_over_serial(msg)==0) {
-      stats.ser_tx_err += 1;
-    }
+    send_over_serial(msg);
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
 #if DEBUG
     Serial.print("message from CAN: ");
@@ -125,18 +112,14 @@ void loop_slave() {
   if (Serial2.available()) {
     CanMessage msg;
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.ser_rx += 1;
     size_t cnt = recv_over_serial(&msg);
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
     if (cnt <= 0) {
-      stats.ser_rx_err += 1;
       //Serial.println("zero len message");
       return;
     }
-    stats.can_tx += 1;
     bool status = send_over_can(msg);
     if (!status) {
-      stats.can_tx_err += 1;
       //Serial.println("can send failed");
       return;
     }
@@ -145,111 +128,92 @@ void loop_slave() {
     dump_msg(msg);
 #endif
   }
-  print_stats(10000);
 }
 
 uint32_t last_send_ms = 0;
 void loop_debugger() {
+  print_stats(1000);
+
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
     CanMessage msg = CanMessage_init_zero;
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.can_rx += 1;
     if (!recv_over_can(&msg)) {
-      stats.can_rx_err += 1;
     }
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
   }
 
-  if (millis() > last_send_ms+10) {
+  if (millis() > last_send_ms+1) {
     CanMessage msg = CanMessage_init_zero;
-
-    msg.prop = 0x11;
-    msg.has_prop = true;
-    msg.has_value = true;
-    msg.value.size = 8;
-    msg.value.bytes[0] = 'g';
-    msg.value.bytes[1] = 'e';
-    msg.value.bytes[2] = 'n';
-    msg.value.bytes[3] = 'e';
-    msg.value.bytes[4] = 'r';
-    msg.value.bytes[5] = 'a';
-    msg.value.bytes[6] = 't';
-    msg.value.bytes[7] = 'o';
+    make_message(&msg);
 
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.can_tx += 1;
-    bool status = send_over_can(msg);
-    if (!status) {
-      //Serial.println("can send failed");
-      stats.can_tx_err += 1;
+    send_over_can(msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+
+    last_send_ms=millis();
+  }
+}
+
+void loop_mirror(uint32_t parity) {
+  print_stats(1000);
+
+  int packetSize = CAN.parsePacket();
+  if (packetSize > 0) {
+    CanMessage msg = CanMessage_init_zero;
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    bool status = recv_over_can(&msg);
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    if (status <= 0) {
+      return;
     }
+    if (msg.has_prop && msg.prop % 2 == parity) {
+      send_over_can(msg);
+    }
+  }
+
+  if (millis() > last_send_ms+1) {
+    CanMessage msg = CanMessage_init_zero;
+    make_message(&msg);
+
+    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+    send_over_can(msg);
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
 
     last_send_ms=millis();
   }
 
-  print_stats(1000);
-}
-
-void loop_mirror(uint32_t parity) {
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    CanMessage msg = CanMessage_init_zero;
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.can_rx += 1;
-    if (!recv_over_can(&msg)) {
-      stats.can_rx_err += 1;
-    }
-    if (msg.has_prop && msg.prop % 2 == parity) {
-      stats.can_tx += 1;
-      if (!send_over_can(msg)) {
-        stats.can_tx_err += 1;
-      }
-    }
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-  }
-  print_stats(1000);
 }
 
 void loop_master() {
-  int packetSize = CAN.parsePacket();
+  print_stats(10000);
 
+  int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
     CanMessage msg = CanMessage_init_zero;
 
-    stats.can_rx += 1;
     if (!recv_over_can(&msg)) {
-      stats.can_rx_err += 1;
+      return;
     }
-    stats.ser_tx += 1;
-    if (send_over_serial(msg) == 0) {
-      stats.ser_tx_err += 1;
-    }
+    send_over_serial(msg);
   }
 
   if (Serial2.available()) {
     int cnt = 0;
     CanMessage msg;
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    stats.ser_rx += 1;
     cnt = recv_over_serial(&msg);
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
     if (cnt <= 0) {
-      stats.ser_rx_err += 1;
       Serial.println("zero len message");
       return;
     }
-    stats.can_tx += 1;
     bool status = send_over_can(msg);
     if (!status) {
-      stats.can_tx_err += 1;
       Serial.println("can send failed");
       return;
     }
   }
-
-  print_stats(1000);
 }
 
 void loop() {
