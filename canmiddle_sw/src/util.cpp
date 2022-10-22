@@ -14,11 +14,11 @@ void print_stats(uint32_t period_ms) {
     Serial.printf("[%08d] can: tx/err tx, rx/err rx: %d/%d, %d/%d",
      stats_print_ms, stats.can_tx, stats.can_tx_err, stats.can_rx, stats.can_rx_err);
     if (stats.ser_tx > 0 || stats.ser_rx > 0) {
-      Serial.printf(", ser: tx/err tx, rx/err rx: %d/%d, %d/%d\r\n",
+      Serial.printf(", ser: tx/err tx, rx/err rx: %d/%d, %d/%d",
       stats.ser_tx, stats.ser_tx_err, stats.ser_rx, stats.ser_rx_err);
-    } else {
-      Serial.println();
     }
+    Serial.printf(" ser drops: %d", stats.ser_drops);
+    Serial.println();
   }
 }
 

@@ -23,13 +23,17 @@ typedef struct _CanMessage {
 typedef struct _Request { 
     bool has_message_in;
     CanMessage message_in;
+    /* Placeholder to avoid sending lenght 1 messages. */
     bool placeholder;
 } Request;
 
 typedef struct _Response { 
     bool has_message_out;
     CanMessage message_out;
+    /* Placeholder to avoid sending lenght 0 messages. */
     bool placeholder;
+    bool has_drops;
+    uint32_t drops;
 } Response;
 
 
@@ -40,10 +44,10 @@ extern "C" {
 /* Initializer values for message structs */
 #define CanMessage_init_default                  {false, 0, false, 0, false, {0, {0}}}
 #define Request_init_default                     {false, CanMessage_init_default, 0}
-#define Response_init_default                    {false, CanMessage_init_default, 0}
+#define Response_init_default                    {false, CanMessage_init_default, 0, false, 0}
 #define CanMessage_init_zero                     {false, 0, false, 0, false, {0, {0}}}
 #define Request_init_zero                        {false, CanMessage_init_zero, 0}
-#define Response_init_zero                       {false, CanMessage_init_zero, 0}
+#define Response_init_zero                       {false, CanMessage_init_zero, 0, false, 0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define CanMessage_prop_tag                      1
@@ -53,6 +57,7 @@ extern "C" {
 #define Request_placeholder_tag                  2
 #define Response_message_out_tag                 1
 #define Response_placeholder_tag                 2
+#define Response_drops_tag                       3
 
 /* Struct field encoding specification for nanopb */
 #define CanMessage_FIELDLIST(X, a) \
@@ -71,7 +76,8 @@ X(a, STATIC,   REQUIRED, BOOL,     placeholder,       2)
 
 #define Response_FIELDLIST(X, a) \
 X(a, STATIC,   OPTIONAL, MESSAGE,  message_out,       1) \
-X(a, STATIC,   REQUIRED, BOOL,     placeholder,       2)
+X(a, STATIC,   REQUIRED, BOOL,     placeholder,       2) \
+X(a, STATIC,   OPTIONAL, UINT32,   drops,             3)
 #define Response_CALLBACK NULL
 #define Response_DEFAULT NULL
 #define Response_message_out_MSGTYPE CanMessage
@@ -88,7 +94,7 @@ extern const pb_msgdesc_t Response_msg;
 /* Maximum encoded size of messages (where known) */
 #define CanMessage_size                          18
 #define Request_size                             22
-#define Response_size                            22
+#define Response_size                            28
 
 #ifdef __cplusplus
 } /* extern "C" */

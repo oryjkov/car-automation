@@ -18,4 +18,5 @@ message Response {
     optional CanMessage message_out = 1;
     // Placeholder to avoid sending lenght 0 messages.
     required bool placeholder = 2;
+    optional uint32 drops = 3;
 }
