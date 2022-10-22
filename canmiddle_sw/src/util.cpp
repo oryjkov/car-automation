@@ -46,7 +46,7 @@ bool send_over_can(const CanMessage &msg) {
     Serial.println("can value is required");
     return false;
   }
-  if (msg.value.size < 1  || msg.value.size > 8) {
+  if (msg.value.size > 8) {
     Serial.println("can value size is wrong");
     return false;
   }

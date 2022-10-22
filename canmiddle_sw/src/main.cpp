@@ -37,19 +37,21 @@ void program_as(Role r) {
   Serial.printf("programmed as: %d\r\n", r);
 }
 
-void make_message(CanMessage *msg) {
-  msg->prop = 0x11;
+void make_message(uint32_t parity, CanMessage *msg) {
   msg->has_prop = true;
+  if (random(1) == 0) {
+    msg->prop = random(1<<11) << 1 + parity;
+  } else {
+    msg->prop = random(1<<29) << 1 + parity;
+    msg->has_extended = true;
+    msg->extended = true;
+  }
+  
   msg->has_value = true;
-  msg->value.size = 8;
-  msg->value.bytes[0] = 'g';
-  msg->value.bytes[1] = 'e';
-  msg->value.bytes[2] = 'n';
-  msg->value.bytes[3] = 'e';
-  msg->value.bytes[4] = 'r';
-  msg->value.bytes[5] = 'a';
-  msg->value.bytes[6] = 't';
-  msg->value.bytes[7] = 'o';
+  msg->value.size = random(9);
+  for (int i = 0; i < msg->value.size; i++) {
+    msg->value.bytes[i] = random(256);
+  }
 }
 
 void setup() {
@@ -105,7 +107,7 @@ void loop_debugger() {
 
   if (millis() > last_send_ms+1) {
     CanMessage msg = CanMessage_init_zero;
-    make_message(&msg);
+    make_message(1, &msg);
 
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
     send_over_can(msg);
@@ -134,7 +136,7 @@ void loop_mirror(uint32_t parity) {
 
   if (millis() > last_send_ms+1) {
     CanMessage msg = CanMessage_init_zero;
-    make_message(&msg);
+    make_message(1-parity, &msg);
 
     digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
     send_over_can(msg);
@@ -220,7 +222,8 @@ void loop() {
   } else if (r == SLAVE) {
     loop_slave();
   } else if (r == DEBUGGER) {
-    loop_debugger();
+    loop_mirror(0);
+    //loop_debugger();
   } else if (r == MIRROR_ODD) {
     loop_mirror(1);
   } else {
