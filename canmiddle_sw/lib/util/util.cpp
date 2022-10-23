@@ -14,7 +14,7 @@ Stats *get_stats() {
 
 void make_message(uint32_t parity, CanMessage *msg) {
   msg->has_prop = true;
-  if (random(1) == 0) {
+  if (random(2) == 0) {
     msg->prop = random(1<<11) << 1 + parity;
   } else {
     msg->prop = random(1<<29) << 1 + parity;
@@ -168,7 +168,6 @@ bool recv_over_can(CanMessage *msg) {
   if (CAN.packetExtended()) {
     msg->has_extended = true;
     msg->extended = true;
-    Serial2.print("extended, ");
   }
   msg->has_prop = true;
   msg->prop = CAN.packetId();
