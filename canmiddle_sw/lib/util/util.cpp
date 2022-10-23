@@ -12,6 +12,52 @@ Stats *get_stats() {
   return &stats;
 }
 
+
+constexpr size_t message_buffer_size = 32;
+CanMessage message_buffer[message_buffer_size];
+size_t messages_in_buffer = 0;
+size_t messages_consumed = 0;
+size_t lost_messages = 0;
+size_t get_lost_messages() {
+  return lost_messages;
+}
+// Returns a CanMessage pointer to read into.
+CanMessage *alloc_in_buffer() {
+  if (messages_in_buffer < message_buffer_size) {
+    messages_in_buffer += 1;
+  } else {
+    lost_messages += 1;
+  }
+  return &message_buffer[messages_in_buffer-1];
+}
+void dealloc_in_buffer() {
+  if (messages_in_buffer > 0) {
+    messages_in_buffer -= 1;
+  }
+}
+CanMessage *consume_from_buffer() {
+  if (messages_consumed < messages_in_buffer) {
+    messages_consumed += 1;
+    return &message_buffer[messages_consumed-1];
+  }
+
+  messages_in_buffer = 0;
+  return nullptr;
+}
+
+void populate_response(Response *rep) {
+  rep->has_drops = true;
+  rep->drops = get_lost_messages();
+  messages_consumed = 0;
+  while (CanMessage *m = consume_from_buffer()) {
+    if (m == nullptr) {
+      break;
+    }
+    memcpy(&rep->messages_out[rep->messages_out_count], m, sizeof(CanMessage));
+    rep->messages_out_count += 1;
+  }
+}
+
 void make_message(uint32_t parity, CanMessage *msg) {
   msg->has_prop = true;
   if (random(2) == 0) {
@@ -64,15 +110,15 @@ size_t send_buf_over_serial(uint8_t *buf, size_t len) {
     Serial.println("zero length message");
     return 0;
   }
-  if (len > 255) {
+  if (len > send_recv_buffer_size) {
     Serial.println("message too long");
     return 0;
   }
 
-  uint8_t byte_len = len & 0xff;
-  size_t bytes_written = Serial2.write(&byte_len, 1);
+  uint8_t byte_len[2] = {(len>>8) & 0xff, len & 0xff};
+  size_t bytes_written = Serial2.write(byte_len, sizeof(byte_len));
   stats.ser_bytes_tx += bytes_written;
-  if (bytes_written < 1) {
+  if (bytes_written < sizeof(byte_len)) {
     Serial.printf("write length unexpected: read %d bytes, want 1\r\n", bytes_written);
     return 0;
   }
@@ -97,17 +143,19 @@ size_t recv_buf_over_serial(uint8_t *buf, size_t max_length) {
   uint8_t message_length;
 
   size_t bytes_read = 0;
+  uint8_t bytes_len[2] = {0, 0};
 
-  while (bytes_read < 1 && (millis()-rx_start) < timeout_ms) {
-    size_t tmp_read = Serial2.read(&message_length, 1);
+  while (bytes_read < sizeof(bytes_len) && (millis()-rx_start) < timeout_ms) {
+    size_t tmp_read = Serial2.read(bytes_len, sizeof(bytes_len));
     bytes_read += tmp_read;
     stats.ser_bytes_rx += tmp_read;
 	  delay(1);
   }
-  if (bytes_read < 1) {
+  if (bytes_read < sizeof(bytes_len)) {
     Serial.printf("preamble: read length unexpected: read %d bytes, want 1, after %dms\r\n", bytes_read, millis()-rx_start);
     return 0;
   }
+  message_length = (bytes_len[0]<<8) + bytes_len[1];
   if (message_length > max_length) {
 	  return 0;
   }

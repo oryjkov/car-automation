@@ -7,6 +7,11 @@
 #include <Arduino.h>
 #include "message.pb.h"
 
+CanMessage *alloc_in_buffer();
+void dealloc_in_buffer();
+size_t get_lost_messages();
+void populate_response(Response *rep);
+
 struct Stats {
   uint32_t can_tx;
   uint32_t can_rx;
@@ -23,12 +28,13 @@ struct Stats {
 void print_stats(uint32_t period_ms);
 Stats *get_stats();
 
+constexpr size_t send_recv_buffer_size = 1024;
 size_t send_buf_over_serial(uint8_t *buf, size_t len);
 size_t recv_buf_over_serial(uint8_t *buf, size_t max_length);
 
 template<typename M>
 size_t send_over_serial(const M &msg, const pb_msgdesc_t *fields) {
-  uint8_t buffer[255];
+  uint8_t buffer[send_recv_buffer_size];
   size_t message_length;
 
   pb_ostream_t stream = pb_ostream_from_buffer(buffer, sizeof(buffer));
@@ -44,7 +50,7 @@ size_t send_over_serial(const M &msg, const pb_msgdesc_t *fields) {
     Serial.println("zero length message");
     return 0;
   }
-  if (message_length > 255) {
+  if (message_length > sizeof(buffer)) {
     Serial.println("message too long");
     return 0;
   }
@@ -54,7 +60,7 @@ size_t send_over_serial(const M &msg, const pb_msgdesc_t *fields) {
 
 template <typename M>
 size_t recv_over_serial(M *msg, const pb_msgdesc_t *fields) {
-  uint8_t buf[255];
+  uint8_t buf[send_recv_buffer_size];
 
   uint8_t message_length = recv_buf_over_serial(buf, sizeof(buf));
   if (message_length <= 0) {

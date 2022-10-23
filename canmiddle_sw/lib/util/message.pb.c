@@ -12,7 +12,7 @@ PB_BIND(CanMessage, CanMessage, AUTO)
 PB_BIND(Request, Request, AUTO)
 
 
-PB_BIND(Response, Response, AUTO)
+PB_BIND(Response, Response, 2)
 
 
 

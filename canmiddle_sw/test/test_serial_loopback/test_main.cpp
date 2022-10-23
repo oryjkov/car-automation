@@ -34,6 +34,7 @@ void test_send_recv_message() {
   TEST_ASSERT_EQUAL(0, memcmp(&m, &m2, sizeof(CanMessage)));
 }
 
+// Verifies that stats are updated.
 void test_send_recv_stats() {
   memset(get_stats(), 0, sizeof(Stats));
   uint8_t buf[10];
@@ -49,6 +50,58 @@ void test_send_recv_stats() {
   TEST_ASSERT_EQUAL(0, get_stats()->ser_tx_err);
 }
 
+// Tests that many CAN messages are handled.
+void test_recv_can_many() {
+  CanMessage ms[32];
+  for (int i = 0; i < 32; i++) {
+    CanMessage *m = alloc_in_buffer();
+    *m = CanMessage_init_zero;
+    make_message(i % 2, m);
+    ms[i] = *m;
+  }
+  Response rep = Response_init_zero;
+  populate_response(&rep);
+
+  TEST_ASSERT_EQUAL(32, rep.messages_out_count);
+  for (int i = 0; i < 32; i++) {
+    TEST_ASSERT_EQUAL(0, memcmp(&rep.messages_out[i], &ms[i], sizeof(CanMessage)));
+  }
+
+  TEST_ASSERT_EQUAL(get_lost_messages(), 0);
+}
+
+void test_recv_can_too_many() {
+  for (int i = 0; i < 33; i++) {
+    CanMessage *m = alloc_in_buffer();
+    *m = CanMessage_init_zero;
+    make_message(i % 2, m);
+  }
+  Response rep = Response_init_zero;
+  populate_response(&rep);
+
+  TEST_ASSERT_EQUAL(get_lost_messages(), 1);
+}
+
+/* This is too long to fit in the serial buffer :(
+void test_send_recv_long() {
+  for (int i = 0; i < 32; i++) {
+    CanMessage *m = alloc_in_buffer();
+    *m = CanMessage_init_zero;
+    make_message(i % 2, m);
+  }
+  Response rep = Response_init_zero;
+  populate_response(&rep);
+
+  Response rep2 = Response_init_zero;
+
+  size_t l = send_over_serial(&rep, Response_fields);
+  TEST_ASSERT_GREATER_THAN(1, l);
+  Serial2.flush(true);
+  TEST_ASSERT_EQUAL(l, recv_over_serial(&rep2, Response_fields));
+
+  TEST_ASSERT_EQUAL(get_lost_messages(), 1);
+}
+*/
 
 void setup() {
 	Serial.begin(115200);
@@ -60,6 +113,9 @@ void setup() {
 	RUN_TEST(test_send_recv);
 	RUN_TEST(test_send_recv_message);
 	RUN_TEST(test_send_recv_stats);
+	RUN_TEST(test_recv_can_many);
+	RUN_TEST(test_recv_can_many);
+	RUN_TEST(test_recv_can_too_many);
 	UNITY_END();
 }
 

@@ -151,45 +151,33 @@ void loop_master() {
   if (rep.has_drops) {
     get_stats()->ser_drops = rep.drops;
   }
-  if (rep.has_message_out) {
-    bool status = send_over_can(rep.message_out);
+  for (int i = 0; i < rep.messages_out_count; i++) {
+    bool status = send_over_can(rep.messages_out[i]);
     if (!status) {
       return;
     }
   }
 }
 
-CanMessage message_buffer = CanMessage_init_zero;
-bool has_message = false;
-uint32_t lost_messages = 0;
-
 void loop_slave() {
   print_stats(3000);
 
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
-    if (recv_over_can(&message_buffer)) {
-      if (has_message) {
-        lost_messages += 1;
-      }
-      has_message = true;
+    CanMessage *m = alloc_in_buffer();
+    if (!recv_over_can(m)) {
+      dealloc_in_buffer();
     }
   }
 
   if (Serial2.available()) {
     Request req = Request_init_zero;
-    Response rep = Response_init_zero;
-    rep.has_drops = true;
-    rep.drops = lost_messages;
     size_t recv_len = recv_over_serial(&req, Request_fields);
     if (recv_len <= 0) {
       return;
     }
-    if (has_message) {
-      memcpy(&rep.message_out, &message_buffer, sizeof(message_buffer));
-      rep.has_message_out = true;
-      has_message = false;
-    }
+    Response rep = Response_init_zero;
+    populate_response(&rep);
     send_over_serial(rep, Response_fields);
 
     if (req.has_message_in) {
