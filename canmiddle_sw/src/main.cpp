@@ -49,7 +49,7 @@ void setup() {
   pref.begin("canmiddle", true);
   r = static_cast<Role>(pref.getUInt("role", 0));
 
-  Serial2.begin(500000);
+  Serial2.begin(5000000);
 
   CAN.setPins(GPIO_NUM_26, GPIO_NUM_25);
   if (!CAN.begin(500E3)) {

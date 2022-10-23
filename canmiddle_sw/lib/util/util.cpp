@@ -83,7 +83,6 @@ size_t send_buf_over_serial(uint8_t *buf, size_t len) {
     return 0;
   }
 
-  Serial.printf("!!!!!! %d\r\n", stats.ser_bytes_tx);
   stats.ser_tx_err -= 1;
   return len;
 }
@@ -121,8 +120,8 @@ size_t recv_buf_over_serial(uint8_t *buf, size_t max_length) {
 	  delay(1);
   }
   if (bytes_read < message_length) {
-    Serial.printf("message: read length unexpected: read %d bytes, want %d\r\n",
-	  bytes_read, message_length);
+    Serial.printf("message: read length unexpected: read %d bytes, want %d after %dms\r\n",
+	    bytes_read, message_length, millis()-rx_start);
     return 0;
   }
 
