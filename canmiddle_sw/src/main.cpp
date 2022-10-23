@@ -37,23 +37,6 @@ void program_as(Role r) {
   Serial.printf("programmed as: %d\r\n", r);
 }
 
-void make_message(uint32_t parity, CanMessage *msg) {
-  msg->has_prop = true;
-  if (random(1) == 0) {
-    msg->prop = random(1<<11) << 1 + parity;
-  } else {
-    msg->prop = random(1<<29) << 1 + parity;
-    msg->has_extended = true;
-    msg->extended = true;
-  }
-  
-  msg->has_value = true;
-  msg->value.size = random(9);
-  for (int i = 0; i < msg->value.size; i++) {
-    msg->value.bytes[i] = random(256);
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   Serial.println("serial port initialized");
@@ -166,7 +149,7 @@ void loop_master() {
   }
 
   if (rep.has_drops) {
-    stats.ser_drops = rep.drops;
+    get_stats()->ser_drops = rep.drops;
   }
   if (rep.has_message_out) {
     bool status = send_over_can(rep.message_out);
