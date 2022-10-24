@@ -30,7 +30,7 @@ Stats *get_stats();
 
 constexpr size_t send_recv_buffer_size = 1024;
 size_t send_buf_over_serial(uint8_t *buf, size_t len);
-size_t recv_buf_over_serial(uint8_t *buf, size_t max_length);
+size_t recv_buf_over_serial(uint8_t *buf, size_t max_length, uint32_t timeout_ms = 100);
 
 template<typename M>
 size_t send_over_serial(const M &msg, const pb_msgdesc_t *fields) {
@@ -62,7 +62,7 @@ template <typename M>
 size_t recv_over_serial(M *msg, const pb_msgdesc_t *fields) {
   uint8_t buf[send_recv_buffer_size];
 
-  uint8_t message_length = recv_buf_over_serial(buf, sizeof(buf));
+  size_t message_length = recv_buf_over_serial(buf, sizeof(buf));
   if (message_length <= 0) {
     return 0;
   }

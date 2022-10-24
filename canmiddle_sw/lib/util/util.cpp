@@ -12,7 +12,6 @@ Stats *get_stats() {
   return &stats;
 }
 
-
 constexpr size_t message_buffer_size = 32;
 CanMessage message_buffer[message_buffer_size];
 size_t messages_in_buffer = 0;
@@ -115,7 +114,7 @@ size_t send_buf_over_serial(uint8_t *buf, size_t len) {
     return 0;
   }
 
-  uint8_t byte_len[2] = {(len>>8) & 0xff, len & 0xff};
+  uint8_t byte_len[2] = {static_cast<uint8_t>((len>>8) & 0xff), static_cast<uint8_t>(len & 0xff)};
   size_t bytes_written = Serial2.write(byte_len, sizeof(byte_len));
   stats.ser_bytes_tx += bytes_written;
   if (bytes_written < sizeof(byte_len)) {
@@ -135,12 +134,10 @@ size_t send_buf_over_serial(uint8_t *buf, size_t len) {
 
 // Receives data from the serial port. Up to max_length bytes will be read.
 // Returns the number of bytes read in to the buffer.
-size_t recv_buf_over_serial(uint8_t *buf, size_t max_length) {
+size_t recv_buf_over_serial(uint8_t *buf, size_t max_length, uint32_t timeout_ms) {
   stats.ser_rx_err += 1;
-
-  uint32_t timeout_ms = 100;
   uint32_t rx_start = millis();
-  uint8_t message_length;
+  uint16_t message_length;
 
   size_t bytes_read = 0;
   uint8_t bytes_len[2] = {0, 0};
@@ -155,7 +152,7 @@ size_t recv_buf_over_serial(uint8_t *buf, size_t max_length) {
     Serial.printf("preamble: read length unexpected: read %d bytes, want 1, after %dms\r\n", bytes_read, millis()-rx_start);
     return 0;
   }
-  message_length = (bytes_len[0]<<8) + bytes_len[1];
+  message_length = (static_cast<uint16_t>(bytes_len[0])<<8) + bytes_len[1];
   if (message_length > max_length) {
 	  return 0;
   }

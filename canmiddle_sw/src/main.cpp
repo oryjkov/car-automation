@@ -49,6 +49,7 @@ void setup() {
   pref.begin("canmiddle", true);
   r = static_cast<Role>(pref.getUInt("role", 0));
 
+  Serial2.setRxBufferSize(send_recv_buffer_size);
   Serial2.begin(5000000);
 
   CAN.setPins(GPIO_NUM_26, GPIO_NUM_25);
