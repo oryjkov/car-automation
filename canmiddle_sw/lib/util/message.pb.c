@@ -15,4 +15,11 @@ PB_BIND(Request, Request, AUTO)
 PB_BIND(Response, Response, 2)
 
 
+PB_BIND(Metadata, Metadata, AUTO)
+
+
+PB_BIND(SnoopData, SnoopData, AUTO)
+
+
+
 

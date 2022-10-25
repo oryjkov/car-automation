@@ -1,0 +1,2 @@
+CanMessage.value max_size:40
+Response.messages_out max_count:32

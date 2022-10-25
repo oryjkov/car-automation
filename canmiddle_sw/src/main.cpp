@@ -1,12 +1,26 @@
 #include <Arduino.h>
 #include <CAN.h>
 #include <Preferences.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 
 #include <pb_encode.h>
 #include <pb_decode.h>
 
 #include "util.h"
 #include "message.pb.h"
+#include "secrets.h"
+
+AsyncWebServer server(80);
+
+const char* ssid = SECRET_WIFI_SSID;
+const char* password = SECRET_WIFI_PASSWORD;
+
+uint8_t *snoop_buffer;
+size_t snoop_buffer_position = 0;
+uint32_t snoop_end_ms = 0;
+constexpr size_t snoop_buffer_max_size = 50 * (1<<10);
 
 Preferences pref;
 
@@ -63,6 +77,55 @@ void setup() {
 
   Serial.printf("running as role: %d\r\n", r);
   if (r == MASTER) {
+    snoop_buffer = (uint8_t *)malloc(snoop_buffer_max_size);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+
+    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+      Serial.printf("WiFi Failed!\n");
+      return;
+    }
+
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      AsyncResponseStream *response = request->beginResponseStream("text/plain");
+      print_stats(response, get_stats());
+      request->send(response);
+    });
+    server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request){
+      if (snoop_end_ms > millis()) {
+        request->send(400, "text/plain", "snoop is still active");
+      } else {
+        AsyncWebServerResponse *response = request->beginResponse_P(200, "application/octet-stream", snoop_buffer,
+          snoop_buffer_position);
+        request->send(response);
+      }
+    });
+    server.on("/start_snoop", HTTP_GET, [](AsyncWebServerRequest *request){
+      AsyncResponseStream *response = request->beginResponseStream("text/plain");
+      if (snoop_end_ms > millis()) {
+        response->printf("already running for another %d ms, snooped %d bytes\r\n",
+          snoop_end_ms - millis(), snoop_buffer_position);
+      } else {
+        uint32_t duration_ms = 1000;
+        if (request->hasParam("duration_ms")) {
+          auto p = request->getParam("duration_ms");
+          int d = p->value().toInt();
+          if ((d>0) && (d<10000)) {
+            duration_ms = d;
+          }
+        }
+        snoop_end_ms = millis() + duration_ms;
+        snoop_buffer_position = 0;
+        response->printf("Snoop started. will run for %d buffer available: %d", duration_ms,
+          snoop_buffer_max_size);
+      }
+      request->send(response);
+    });
+    server.begin();
+
     digitalWrite(LED_BUILTIN, 1);
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
@@ -78,7 +141,7 @@ void setup() {
 
 uint32_t last_send_ms = 0;
 void loop_debugger() {
-  print_stats(1000);
+  print_stats_ser(1000);
 
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
@@ -102,7 +165,7 @@ void loop_debugger() {
 }
 
 void loop_mirror(uint32_t parity) {
-  print_stats(1000);
+  print_stats_ser(1000);
 
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
@@ -131,8 +194,23 @@ void loop_mirror(uint32_t parity) {
 
 }
 
+size_t add_to_snoop_buffer(uint8_t *buf, size_t start_from, size_t max_size,
+  const SnoopData &s) {
+  uint8_t *length_field = buf + start_from;
+  start_from += 1;
+  pb_ostream_t stream = pb_ostream_from_buffer(buf + start_from, max_size - start_from);
+  bool status = pb_encode(&stream, &SnoopData_msg, &s);
+  if (!status) {
+    Serial.printf("Encoding failed: %s\r\n", PB_GET_ERROR(&stream));
+    return 0;
+  }
+  
+  *length_field = stream.bytes_written;
+  return stream.bytes_written+1;
+}
+
 void loop_master() {
-  print_stats(3000);
+  print_stats_ser(3000);
 
   Request req = Request_init_zero;
   Response rep = Response_init_zero;
@@ -158,10 +236,22 @@ void loop_master() {
       return;
     }
   }
+  // Snooping..
+  if (snoop_end_ms > millis()) {
+    auto recv_ms = millis();
+    if (req.has_message_in) {
+      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
+        {.message = req.message_in, .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
+    }
+    for (int i = 0; i < rep.messages_out_count; i++) {
+      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
+        {.message = rep.messages_out[i], .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
+    }
+  }
 }
 
 void loop_slave() {
-  print_stats(3000);
+  print_stats_ser(3000);
 
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
