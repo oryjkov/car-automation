@@ -222,6 +222,13 @@ void loop_master() {
       return;
     }
   }
+  if (snoop_end_ms > millis()) {
+    auto recv_ms = millis();
+    if (req.has_message_in) {
+      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
+        {.message = req.message_in, .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
+    }
+  }
 
   if (!issue_rpc(req, &rep)) {
     return;
@@ -233,19 +240,15 @@ void loop_master() {
   for (int i = 0; i < rep.messages_out_count; i++) {
     bool status = send_over_can(rep.messages_out[i]);
     if (!status) {
-      return;
+      break;
     }
   }
   // Snooping..
   if (snoop_end_ms > millis()) {
     auto recv_ms = millis();
-    if (req.has_message_in) {
-      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
-        {.message = req.message_in, .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
-    }
     for (int i = 0; i < rep.messages_out_count; i++) {
       snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
-        {.message = rep.messages_out[i], .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
+        {.message = rep.messages_out[i], .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_SLAVE}});
     }
   }
 }
