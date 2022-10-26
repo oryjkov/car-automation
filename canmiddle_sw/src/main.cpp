@@ -258,10 +258,12 @@ void loop_slave() {
 
   int packetSize = CAN.parsePacket();
   if (packetSize > 0) {
+    digitalWrite(LED_BUILTIN, 1);
     CanMessage *m = alloc_in_buffer();
     if (!recv_over_can(m)) {
       dealloc_in_buffer();
     }
+    digitalWrite(LED_BUILTIN, 0);
   }
 
   if (Serial2.available()) {
@@ -275,7 +277,9 @@ void loop_slave() {
     send_over_serial(rep, Response_fields);
 
     if (req.has_message_in) {
+      digitalWrite(LED_BUILTIN, 1);
       send_over_can(req.message_in);
+      digitalWrite(LED_BUILTIN, 0);
     }
   }
 }
