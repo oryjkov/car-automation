@@ -24,7 +24,7 @@ message Metadata {
         MASTER = 1;
         SLAVE = 2;
     };
-    required uint32 recv_ms = 1;
+    required uint64 recv_us = 1;
     required Source source = 2;
 }
 

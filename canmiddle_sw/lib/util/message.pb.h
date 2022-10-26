@@ -27,7 +27,7 @@ typedef struct _CanMessage {
 } CanMessage;
 
 typedef struct _Metadata { 
-    uint32_t recv_ms;
+    uint64_t recv_us;
     Metadata_Source source;
 } Metadata;
 
@@ -79,7 +79,7 @@ extern "C" {
 #define CanMessage_prop_tag                      1
 #define CanMessage_extended_tag                  2
 #define CanMessage_value_tag                     3
-#define Metadata_recv_ms_tag                     1
+#define Metadata_recv_us_tag                     1
 #define Metadata_source_tag                      2
 #define Request_message_in_tag                   1
 #define Request_placeholder_tag                  2
@@ -113,7 +113,7 @@ X(a, STATIC,   OPTIONAL, UINT32,   drops,             3)
 #define Response_messages_out_MSGTYPE CanMessage
 
 #define Metadata_FIELDLIST(X, a) \
-X(a, STATIC,   REQUIRED, UINT32,   recv_ms,           1) \
+X(a, STATIC,   REQUIRED, UINT64,   recv_us,           1) \
 X(a, STATIC,   REQUIRED, UENUM,    source,            2)
 #define Metadata_CALLBACK NULL
 #define Metadata_DEFAULT (const pb_byte_t*)"\x10\x01\x00"
@@ -141,10 +141,10 @@ extern const pb_msgdesc_t SnoopData_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define CanMessage_size                          50
-#define Metadata_size                            8
+#define Metadata_size                            13
 #define Request_size                             54
 #define Response_size                            1672
-#define SnoopData_size                           62
+#define SnoopData_size                           67
 
 #ifdef __cplusplus
 } /* extern "C" */

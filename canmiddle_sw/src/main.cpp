@@ -1,35 +1,36 @@
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include <Arduino.h>
-#include <CAN.h>
-#include <Preferences.h>
-#include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-
-#include <pb_encode.h>
+#include <Preferences.h>
+#include <WiFi.h>
 #include <pb_decode.h>
+#include <pb_encode.h>
 
-#include "util.h"
+#include "driver/gpio.h"
+#include "driver/uart.h"
 #include "message.pb.h"
 #include "secrets.h"
+#include "util.h"
+
+#define EXAMPLE_TAG "TWAI Self Test"
 
 AsyncWebServer server(80);
 
-const char* ssid = SECRET_WIFI_SSID;
-const char* password = SECRET_WIFI_PASSWORD;
-
-uint8_t *snoop_buffer;
-size_t snoop_buffer_position = 0;
-uint32_t snoop_end_ms = 0;
-constexpr size_t snoop_buffer_max_size = 50 * (1<<10);
+const char *ssid = SECRET_WIFI_SSID;
+const char *password = SECRET_WIFI_PASSWORD;
 
 Preferences pref;
 
-enum Role: uint32_t {
-  MASTER=1,
-  SLAVE=2,
+void canbus_check();
+void master_loop();
+
+enum Role : uint32_t {
+  MASTER = 1,
+  SLAVE = 2,
   // Sends on CAN and prints what it gets on CAN.
-  DEBUGGER=3,
-  MIRROR_ODD=4,
+  DEBUGGER = 3,
+  MIRROR_ODD = 4,
 };
 
 Role r;
@@ -55,29 +56,36 @@ void setup() {
   Serial.begin(115200);
   Serial.println("serial port initialized");
 
+  esp_log_level_set("*", ESP_LOG_INFO);
+  esp_log_level_set(EXAMPLE_TAG, ESP_LOG_INFO);
+
   esp_chip_info_t chip;
   esp_chip_info(&chip);
-  Serial.printf("chip info: model: %d, cores: %d, revision: %d\r\n", chip.model, chip.cores, chip.revision);
-  //program_as(DEBUGGER);
+  Serial.printf("chip info: model: %d, cores: %d, revision: %d\r\n", chip.model, chip.cores,
+                chip.revision);
+  // program_as(DEBUGGER);
 
   pref.begin("canmiddle", true);
   r = static_cast<Role>(pref.getUInt("role", 0));
 
-  Serial2.setRxBufferSize(send_recv_buffer_size);
-  Serial2.begin(5000000);
-
-  CAN.setPins(GPIO_NUM_26, GPIO_NUM_25);
-  if (!CAN.begin(500E3)) {
-    Serial.println("can init failed");
-    while(1){};
-  }
-  Serial.println("can port ready");
+  uart_config_t uart_config = {
+      .baud_rate = 5000000,
+      .data_bits = UART_DATA_8_BITS,
+      .parity = UART_PARITY_DISABLE,
+      .stop_bits = UART_STOP_BITS_1,
+      .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+      .source_clk = UART_SCLK_APB,
+  };
+  ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, 1024 * 2, 0, 0, NULL, 0));
+  ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
+  ESP_ERROR_CHECK(
+      uart_set_pin(2, GPIO_NUM_17, GPIO_NUM_16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
   pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.printf("running as role: %d\r\n", r);
   if (r == MASTER) {
-    snoop_buffer = (uint8_t *)malloc(snoop_buffer_max_size);
+    get_snoop_buffer()->buffer = (uint8_t *)malloc(snoop_buffer_max_size);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
@@ -89,203 +97,70 @@ void setup() {
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       AsyncResponseStream *response = request->beginResponseStream("text/plain");
       print_stats(response, get_stats());
       request->send(response);
     });
-    server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request){
-      if (snoop_end_ms > millis()) {
+    server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
+      if (get_snoop_buffer()->end_ms > millis()) {
         request->send(400, "text/plain", "snoop is still active");
       } else {
-        AsyncWebServerResponse *response = request->beginResponse_P(200, "application/octet-stream", snoop_buffer,
-          snoop_buffer_position);
+        AsyncWebServerResponse *response = request->beginResponse_P(
+            200, "application/octet-stream", get_snoop_buffer()->buffer, get_snoop_buffer()->position);
         request->send(response);
       }
     });
-    server.on("/start_snoop", HTTP_GET, [](AsyncWebServerRequest *request){
+    server.on("/start_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
       AsyncResponseStream *response = request->beginResponseStream("text/plain");
-      if (snoop_end_ms > millis()) {
+      if (get_snoop_buffer()->end_ms > millis()) {
         response->printf("already running for another %d ms, snooped %d bytes\r\n",
-          snoop_end_ms - millis(), snoop_buffer_position);
+                         get_snoop_buffer()->end_ms - millis(), get_snoop_buffer()->position);
       } else {
         uint32_t duration_ms = 1000;
         if (request->hasParam("duration_ms")) {
           auto p = request->getParam("duration_ms");
           int d = p->value().toInt();
-          if ((d>0) && (d<10000)) {
+          if ((d > 0) && (d < 10000)) {
             duration_ms = d;
           }
         }
-        snoop_end_ms = millis() + duration_ms;
-        snoop_buffer_position = 0;
+        get_snoop_buffer()->end_ms = millis() + duration_ms;
+        get_snoop_buffer()->position = 0;
         response->printf("Snoop started. will run for %d buffer available: %d", duration_ms,
-          snoop_buffer_max_size);
+                         snoop_buffer_max_size);
       }
       request->send(response);
     });
     server.begin();
 
     digitalWrite(LED_BUILTIN, 1);
+    Serial.println("master_loop");
+    master_loop();
+    Serial.println("master_loop returned");
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
+    master_loop();
   } else if (r == DEBUGGER) {
     digitalWrite(LED_BUILTIN, 0);
   } else if (r == MIRROR_ODD) {
     digitalWrite(LED_BUILTIN, 0);
   } else {
     Serial.printf("role unknown: %d\n", r);
-    while(1) {}
-  }
-}
-
-uint32_t last_send_ms = 0;
-void loop_debugger() {
-  print_stats_ser(1000);
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    CanMessage msg = CanMessage_init_zero;
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    if (!recv_over_can(&msg)) {
-    }
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-  }
-
-  if (millis() > last_send_ms+1) {
-    CanMessage msg = CanMessage_init_zero;
-    make_message(1, &msg);
-
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    send_over_can(msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-
-    last_send_ms=millis();
-  }
-}
-
-void loop_mirror(uint32_t parity) {
-  print_stats_ser(1000);
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    CanMessage msg = CanMessage_init_zero;
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    bool status = recv_over_can(&msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    if (status <= 0) {
-      return;
-    }
-    if (msg.has_prop && msg.prop % 2 == parity) {
-      send_over_can(msg);
+    while (1) {
     }
   }
-
-  if (millis() > last_send_ms+1) {
-    CanMessage msg = CanMessage_init_zero;
-    make_message(1-parity, &msg);
-
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-    send_over_can(msg);
-    digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
-
-    last_send_ms=millis();
-  }
-
-}
-
-size_t add_to_snoop_buffer(uint8_t *buf, size_t start_from, size_t max_size,
-  const SnoopData &s) {
-  uint8_t *length_field = buf + start_from;
-  start_from += 1;
-  pb_ostream_t stream = pb_ostream_from_buffer(buf + start_from, max_size - start_from);
-  bool status = pb_encode(&stream, &SnoopData_msg, &s);
-  if (!status) {
-    Serial.printf("Encoding failed: %s\r\n", PB_GET_ERROR(&stream));
-    return 0;
-  }
-  
-  *length_field = stream.bytes_written;
-  return stream.bytes_written+1;
 }
 
 void loop_master() {
-  print_stats_ser(3000);
-
-  Request req = Request_init_zero;
-  Response rep = Response_init_zero;
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    req.has_message_in = true;
-    if (!recv_over_can(&req.message_in)) {
-      return;
-    }
-  }
-  if (snoop_end_ms > millis()) {
-    auto recv_ms = millis();
-    if (req.has_message_in) {
-      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
-        {.message = req.message_in, .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_MASTER}});
-    }
-  }
-
-  if (!issue_rpc(req, &rep)) {
-    return;
-  }
-
-  if (rep.has_drops) {
-    get_stats()->ser_drops = rep.drops;
-  }
-  for (int i = 0; i < rep.messages_out_count; i++) {
-    bool status = send_over_can(rep.messages_out[i]);
-    if (!status) {
-      break;
-    }
-  }
-  // Snooping..
-  if (snoop_end_ms > millis()) {
-    auto recv_ms = millis();
-    for (int i = 0; i < rep.messages_out_count; i++) {
-      snoop_buffer_position += add_to_snoop_buffer(snoop_buffer, snoop_buffer_position, snoop_buffer_max_size, 
-        {.message = rep.messages_out[i], .metadata = {.recv_ms = recv_ms, .source = Metadata_Source_SLAVE}});
-    }
-  }
+  // placeholder
+  delay(1000);
 }
 
 void loop_slave() {
-  print_stats_ser(3000);
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize > 0) {
-    digitalWrite(LED_BUILTIN, 1);
-    CanMessage *m = alloc_in_buffer();
-    if (!recv_over_can(m)) {
-      dealloc_in_buffer();
-    }
-    digitalWrite(LED_BUILTIN, 0);
-  }
-
-  if (Serial2.available()) {
-    Request req = Request_init_zero;
-    size_t recv_len = recv_over_serial(&req, Request_fields);
-    if (recv_len <= 0) {
-      return;
-    }
-    Response rep = Response_init_zero;
-    populate_response(&rep);
-    get_stats()->ser_pkt_tx += rep.messages_out_count;
-    send_over_serial(rep, Response_fields);
-
-    if (req.has_message_in) {
-      get_stats()->ser_pkt_rx += 1;
-      digitalWrite(LED_BUILTIN, 1);
-      send_over_can(req.message_in);
-      digitalWrite(LED_BUILTIN, 0);
-    }
-  }
+  // placeholder
+  delay(1000);
 }
-
 
 void loop() {
   if (r == MASTER) {
@@ -293,11 +168,14 @@ void loop() {
   } else if (r == SLAVE) {
     loop_slave();
   } else if (r == DEBUGGER) {
-    loop_mirror(0);
-    //loop_debugger();
+    delay(1000);
+    // loop_mirror(0);
+    //  loop_debugger();
   } else if (r == MIRROR_ODD) {
-    loop_mirror(1);
+    delay(1000);
+    // loop_mirror(1);
   } else {
-    while(1) {}
+    while (1) {
+    }
   }
 }
