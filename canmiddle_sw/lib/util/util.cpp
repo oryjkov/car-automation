@@ -169,7 +169,7 @@ size_t recv_buf_over_serial(uint8_t *buf, size_t max_length, uint32_t timeout_ms
 
 
 bool send_over_can(const CanMessage &msg) {
-  stats.can_tx += 1;
+  stats.can_pkt_tx += 1;
   stats.can_tx_err += 1;
 
   if (!msg.has_prop) {
@@ -201,7 +201,7 @@ bool send_over_can(const CanMessage &msg) {
 
 
 bool recv_over_can(CanMessage *msg) {
-  stats.can_rx += 1;
+  stats.can_pkt_rx += 1;
   stats.can_rx_err += 1;
   if (CAN.packetExtended()) {
     msg->has_extended = true;

@@ -274,9 +274,11 @@ void loop_slave() {
     }
     Response rep = Response_init_zero;
     populate_response(&rep);
+    get_stats()->ser_pkt_tx += rep.messages_out_count;
     send_over_serial(rep, Response_fields);
 
     if (req.has_message_in) {
+      get_stats()->ser_pkt_rx += 1;
       digitalWrite(LED_BUILTIN, 1);
       send_over_can(req.message_in);
       digitalWrite(LED_BUILTIN, 0);

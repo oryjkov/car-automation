@@ -13,13 +13,15 @@ size_t get_lost_messages();
 void populate_response(Response *rep);
 
 struct Stats {
-  uint32_t can_tx;
-  uint32_t can_rx;
+  uint32_t can_pkt_tx;
+  uint32_t can_pkt_rx;
   uint32_t can_tx_err;
   uint32_t can_rx_err;
 
+  uint32_t ser_pkt_tx;
   uint32_t ser_bytes_tx;
   uint32_t ser_tx_err;
+  uint32_t ser_pkt_rx;
   uint32_t ser_bytes_rx;
   uint32_t ser_rx_err;
 
@@ -30,13 +32,27 @@ Stats *get_stats();
 
 template<typename P>
 void print_stats(P *printer, Stats *stats) {
+  printer->printf(
+    "can: tx %.2f/%.2f, rx: %.2f/%.2f | "
+    "ser: tx %.2f/%.2f, rx: %.2f/%.2f | ser drops: %d\r\n",
+    float(stats->can_pkt_tx)*1000.0/millis(),
+    float(stats->can_tx_err)*1000.0/millis(),
+    float(stats->can_pkt_rx)*1000.0/millis(),
+    float(stats->can_rx_err)*1000.0/millis(),
+    float(stats->ser_pkt_tx)*1000.0/millis(),
+    float(stats->ser_tx_err)*1000.0/millis(),
+    float(stats->ser_pkt_rx)*1000.0/millis(),
+    float(stats->ser_rx_err)*1000.0/millis(),
+    stats->ser_drops);
+  /*
   printer->printf("can: tx/err tx, rx/err rx: %d/%d, %d/%d",
-    stats->can_tx, stats->can_tx_err, stats->can_rx, stats->can_rx_err);
+    stats->can_pkt_tx, stats->can_tx_err, stats->can_pkt_rx, stats->can_rx_err);
   if (stats->ser_bytes_tx > 0 || stats->ser_bytes_rx > 0) {
     printer->printf(", ser: tx/err tx, rx/err rx: %d/%d, %d/%d",
     stats->ser_bytes_tx, stats->ser_tx_err, stats->ser_bytes_rx, stats->ser_rx_err);
   }
   printer->printf(" ser drops: %d\r\n", stats->ser_drops);
+  */
 }
 
 
