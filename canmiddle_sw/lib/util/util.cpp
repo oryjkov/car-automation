@@ -9,8 +9,6 @@
 #include "esp_log.h"
 #include "message.pb.h"
 
-#define EXAMPLE_TAG "TWAI Self Test"
-
 SnoopBuffer snoop_buffer;
 SnoopBuffer *get_snoop_buffer() { return &snoop_buffer; }
 

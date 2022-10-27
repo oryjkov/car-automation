@@ -13,8 +13,6 @@
 #include "secrets.h"
 #include "util.h"
 
-#define EXAMPLE_TAG "TWAI Self Test"
-
 AsyncWebServer server(80);
 
 const char *ssid = SECRET_WIFI_SSID;

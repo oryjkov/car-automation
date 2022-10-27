@@ -7,6 +7,8 @@
 
 #include "message.pb.h"
 
+#define EXAMPLE_TAG "TWAI Self Test"
+
 struct SnoopBuffer {
   uint8_t *buffer;
   size_t position = 0;
