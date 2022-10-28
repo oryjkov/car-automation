@@ -179,6 +179,8 @@ static void send_state(void *arg) {
     if (cmd == STOP) {
       xQueuePeek(control_q, &cmd, portMAX_DELAY);
       iteration = 1;
+      delay(10);
+      continue;
     }
     // This function is slow, so state stopping will only happen after sending is done.
     model->SendState(iteration);
@@ -188,6 +190,23 @@ static void send_state(void *arg) {
     xQueuePeek(control_q, &cmd, 0);
   }
 }
+
+void toggle_send_state(Command c) {
+  Command unused_cmd;
+  xQueueReceive(control_q, &unused_cmd, 0);
+  if (xQueueSendToBack(control_q, &c, 0) != pdTRUE) {
+    abort();
+  }
+}
+
+void start_send_state() {
+  toggle_send_state(START);
+}
+
+void stop_send_state() {
+  toggle_send_state(STOP);
+}
+
 
 static void event_loop(void *arg) {
   ESP_LOGI(EXAMPLE_TAG, "starting event loop");
@@ -228,22 +247,6 @@ static void event_loop(void *arg) {
       abort();
     }
   }
-}
-
-void toggle_send_state(Command c) {
-  Command unused_cmd;
-  xQueueReceive(control_q, &unused_cmd, 0);
-  if (xQueueSendToBack(control_q, &c, 0) != pdTRUE) {
-    abort();
-  }
-}
-
-void start_send_state() {
-  toggle_send_state(START);
-}
-
-void stop_send_state() {
-  toggle_send_state(STOP);
 }
 
 void master_loop() {
