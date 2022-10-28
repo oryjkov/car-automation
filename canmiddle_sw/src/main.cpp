@@ -23,6 +23,7 @@ Preferences pref;
 void canbus_check();
 void master_loop();
 void start_send_state();
+void stop_send_state();
 
 enum Role : uint32_t {
   MASTER = 1,
@@ -104,6 +105,10 @@ void setup() {
     server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
       start_send_state();
       request->send(200, "text/plain", "Started");
+    });
+    server.on("/stop", HTTP_GET, [](AsyncWebServerRequest *request) {
+      stop_send_state();
+      request->send(200, "text/plain", "Stopped");
     });
     server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
       if (get_snoop_buffer()->IsActive()) {

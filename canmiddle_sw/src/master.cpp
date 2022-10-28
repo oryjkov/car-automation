@@ -218,6 +218,9 @@ static void event_loop(void *arg) {
       }
       */
       display_model->UpdateState(e->msg);
+      if (e->msg.prop == 0x1b000046) {
+        start_send_state();
+      }
       free(e);
     } else {
       free(e);
