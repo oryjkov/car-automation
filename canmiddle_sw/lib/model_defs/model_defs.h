@@ -7,6 +7,8 @@
 
 extern std::unique_ptr<Model<EspAbstraction>> car_model;
 extern std::unique_ptr<Model<EspAbstraction>> display_model;
+extern std::unique_ptr<Model<EspAbstraction>> car_ext_model;
+extern std::unique_ptr<Model<EspAbstraction>> display_ext_model;
 
 void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q);
 

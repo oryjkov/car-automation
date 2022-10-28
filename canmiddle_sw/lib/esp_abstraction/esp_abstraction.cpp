@@ -37,6 +37,4 @@ EspAbstraction::EspAbstraction(QueueHandle_t q) : q(q) {
 }
 EspAbstraction::~EspAbstraction() { vSemaphoreDelete(sem); }
 
-#else
-
 #endif

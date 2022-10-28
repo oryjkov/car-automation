@@ -16,7 +16,6 @@ TEST(ModelTest, SendState) {
   }};
   // clang-format on
   MockEspAbstraction &esp = m.esp;
-  Expectation l = EXPECT_CALL(esp, Lock);
   EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
   EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
   EXPECT_CALL(esp, Enqueue(AllOf(
@@ -27,9 +26,54 @@ TEST(ModelTest, SendState) {
     Field(&CanMessage::has_prop, true),
     Field(&CanMessage::prop, 0x053a)
     )));
-  EXPECT_CALL(esp, Unlock).After(l);
 
-  EXPECT_TRUE(m.SendState());
+  EXPECT_TRUE(m.SendState(1));
+}
+
+TEST(ModelTest, SendStateRepetitions) {
+  // clang-format off
+  Model<MockEspAbstraction> m = {.props = {
+{ .prop = 0x1b00002c, .send_delay_ms =  22, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
+{ .prop = 0x1b00002d, .send_delay_ms =  40, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 2 },
+{ .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
+  }};
+  // clang-format on
+  MockEspAbstraction &esp = m.esp;
+  EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
+  EXPECT_CALL(esp, Enqueue(AllOf(
+    Field(&CanMessage::has_prop, true),
+    Field(&CanMessage::prop, 0x1b00002c),
+    Field(&CanMessage::has_extended, true),
+    Field(&CanMessage::extended, true)
+    )));
+  EXPECT_TRUE(m.SendState(1));
+
+  EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
+  EXPECT_CALL(esp, Enqueue(AllOf(
+    Field(&CanMessage::has_prop, true),
+    Field(&CanMessage::prop, 0x1b00002d),
+    Field(&CanMessage::has_extended, true),
+    Field(&CanMessage::extended, true)
+    )));
+  EXPECT_TRUE(m.SendState(2));
+
+  EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
+  EXPECT_CALL(esp, Enqueue(AllOf(
+    Field(&CanMessage::has_prop, true),
+    Field(&CanMessage::prop, 0x1b00002c),
+    Field(&CanMessage::has_extended, true),
+    Field(&CanMessage::has_prop, true)
+    )));
+  EXPECT_TRUE(m.SendState(3));
+
+  EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
+  EXPECT_CALL(esp, Enqueue(AllOf(
+    Field(&CanMessage::has_prop, true),
+    Field(&CanMessage::prop, 0x1b00002c),
+    Field(&CanMessage::has_extended, true),
+    Field(&CanMessage::has_prop, true)
+    )));
+  EXPECT_TRUE(m.SendState(4));
 }
 
 TEST(ModelTest, Update) {
@@ -41,8 +85,6 @@ TEST(ModelTest, Update) {
   // clang-format on
   MockEspAbstraction &esp = m.esp;
 
-  Expectation l = EXPECT_CALL(esp, Lock);
-  EXPECT_CALL(esp, Unlock).After(l);
   CanMessage msg = {
       .has_prop = true,
       .prop = 0x52a,
@@ -52,13 +94,9 @@ TEST(ModelTest, Update) {
   EXPECT_FALSE(m.UpdateState(msg));  // wrong value length
 
   msg.value.size = 1;
-  l = EXPECT_CALL(esp, Lock);
-  EXPECT_CALL(esp, Unlock).After(l);
   EXPECT_TRUE(m.UpdateState(msg));
 
   msg.prop = 1;
-  l = EXPECT_CALL(esp, Lock);
-  EXPECT_CALL(esp, Unlock).After(l);
   EXPECT_FALSE(m.UpdateState(msg));  // unkown property
 }
 

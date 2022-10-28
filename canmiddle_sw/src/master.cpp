@@ -30,19 +30,13 @@ static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
 static QueueHandle_t twai_tx_queue;
 static QueueHandle_t uart_tx_queue;
 
-struct UpdateTaskParams {
-  enum Command {
-    START,
-    STOP,
-  };
-  // Queue used to start/stop the updates task.
-  QueueHandle_t control_q;
-  SemaphoreHandle_t mu;
-  bool should_run;
-  Model<EspAbstraction> *model;
+enum Command {
+  START,
+  STOP,
 };
-UpdateTaskParams car_update;
-UpdateTaskParams display_update;
+
+// Queue used to start/stop the updates task.
+QueueHandle_t control_q;
 
 static QueueHandle_t rx_queue;
 static void print_stats(void *arg) {
@@ -177,18 +171,21 @@ static void uart_receive_task(void *arg) {
 }
 
 static void send_state(void *arg) {
-  UpdateTaskParams *params = reinterpret_cast<UpdateTaskParams *>(arg);
-  UpdateTaskParams::Command cmd;
-  xQueuePeek(params->control_q, &cmd, portMAX_DELAY);
+  Model<EspAbstraction> *model = reinterpret_cast<Model<EspAbstraction> *>(arg);
+  Command cmd;
+  xQueuePeek(control_q, &cmd, portMAX_DELAY);
+  uint32_t iteration = 1;
   while (1) {
-    if (cmd == UpdateTaskParams::STOP) {
-      xQueuePeek(params->control_q, &cmd, portMAX_DELAY);
+    if (cmd == STOP) {
+      xQueuePeek(control_q, &cmd, portMAX_DELAY);
+      iteration = 1;
     }
     // This function is slow, so state stopping will only happen after sending is done.
-    params->model->SendState();
+    model->SendState(iteration);
+    iteration = (iteration > 100) ? 100 : iteration+1;
     // Try to read a command. If nothing read, just continue with what we had.
     // If something is read and it is a STOP, then the next loop will block.
-    xQueuePeek(params->control_q, &cmd, 0);
+    xQueuePeek(control_q, &cmd, 0);
   }
 }
 
@@ -230,22 +227,20 @@ static void event_loop(void *arg) {
   }
 }
 
-void toggle_send_state(UpdateTaskParams::Command c, UpdateTaskParams *params) {
-  UpdateTaskParams::Command unused_cmd;
-  xQueueReceive(params->control_q, &unused_cmd, 0);
-  if (xQueueSendToBack(params->control_q, &c, 0) != pdTRUE) {
+void toggle_send_state(Command c) {
+  Command unused_cmd;
+  xQueueReceive(control_q, &unused_cmd, 0);
+  if (xQueueSendToBack(control_q, &c, 0) != pdTRUE) {
     abort();
   }
 }
 
 void start_send_state() {
-  toggle_send_state(UpdateTaskParams::START, &car_update);
-  toggle_send_state(UpdateTaskParams::START, &display_update);
+  toggle_send_state(START);
 }
 
 void stop_send_state() {
-  toggle_send_state(UpdateTaskParams::STOP, &car_update);
-  toggle_send_state(UpdateTaskParams::STOP, &display_update);
+  toggle_send_state(STOP);
 }
 
 void master_loop() {
@@ -276,23 +271,16 @@ void master_loop() {
 
   InitModels(twai_tx_queue, uart_tx_queue);
 
-  car_update.control_q = xQueueCreate(1, sizeof(UpdateTaskParams::Command));
-  car_update.model = car_model.get();
-  if (car_update.control_q == 0) {
+  control_q = xQueueCreate(1, sizeof(Command));
+  if (control_q == 0) {
     ESP_LOGE(EXAMPLE_TAG, "cant create an queue");
     abort();
   }
 
-  display_update.control_q = xQueueCreate(1, sizeof(UpdateTaskParams::Command));
-  display_update.model = display_model.get();
-  if (display_update.control_q == 0) {
-    ESP_LOGE(EXAMPLE_TAG, "cant create an queue");
-    abort();
-  }
-  xTaskCreatePinnedToCore(send_state, "update_car", 4096, &car_update, UPDATE_TASK_PRIO, NULL,
-                          tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(send_state, "update_dis", 4096, &display_update, UPDATE_TASK_PRIO, NULL,
-                          tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_car", 4096, car_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_ext_car", 4096, car_ext_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_disp", 4096, display_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_ext_disp", 4096, display_ext_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
 
   ESP_LOGE(EXAMPLE_TAG, "preparing event loop");
   ESP_ERROR_CHECK(twai_start());
