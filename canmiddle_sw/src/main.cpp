@@ -22,6 +22,7 @@ Preferences pref;
 
 void canbus_check();
 void master_loop();
+void start_send_state();
 
 enum Role : uint32_t {
   MASTER = 1,
@@ -83,7 +84,7 @@ void setup() {
 
   Serial.printf("running as role: %d\r\n", r);
   if (r == MASTER) {
-    get_snoop_buffer()->buffer = (uint8_t *)malloc(snoop_buffer_max_size);
+    get_snoop_buffer()->Init();
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
 
@@ -100,8 +101,12 @@ void setup() {
       print_stats(response, get_stats());
       request->send(response);
     });
+    server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
+      start_send_state();
+      request->send(200, "text/plain", "Started");
+    });
     server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
-      if (get_snoop_buffer()->end_ms > millis()) {
+      if (get_snoop_buffer()->IsActive()) {
         request->send(400, "text/plain", "snoop is still active");
       } else {
         AsyncWebServerResponse *response = request->beginResponse_P(
@@ -111,9 +116,9 @@ void setup() {
     });
     server.on("/start_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
       AsyncResponseStream *response = request->beginResponseStream("text/plain");
-      if (get_snoop_buffer()->end_ms > millis()) {
+      if (get_snoop_buffer()->IsActive()) {
         response->printf("already running for another %d ms, snooped %d bytes\r\n",
-                         get_snoop_buffer()->end_ms - millis(), get_snoop_buffer()->position);
+                         get_snoop_buffer()->TimeRemainingMs(), get_snoop_buffer()->position);
       } else {
         uint32_t duration_ms = 1000;
         if (request->hasParam("duration_ms")) {
@@ -123,7 +128,7 @@ void setup() {
             duration_ms = d;
           }
         }
-        get_snoop_buffer()->end_ms = millis() + duration_ms;
+        get_snoop_buffer()->Activate(duration_ms);
         get_snoop_buffer()->position = 0;
         response->printf("Snoop started. will run for %d buffer available: %d", duration_ms,
                          snoop_buffer_max_size);

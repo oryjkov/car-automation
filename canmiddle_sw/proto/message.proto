@@ -21,8 +21,10 @@ message Response {
 
 message Metadata {
     enum Source {
-        MASTER = 1;
-        SLAVE = 2;
+        MASTER = 1;  // RX on CAN
+        SLAVE = 2;   // RX on UART (slave)
+        MASTER_TX = 3;  // TX CAN (i.e. CAN Transmit from master).
+        SLAVE_TX = 4;   // TX UART (i.e. CAN Transmit from slave).
     };
     required uint64 recv_us = 1;
     required Source source = 2;

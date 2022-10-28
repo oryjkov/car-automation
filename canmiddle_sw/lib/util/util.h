@@ -10,14 +10,23 @@
 #define EXAMPLE_TAG "TWAI Self Test"
 
 struct SnoopBuffer {
+  void Init();
+  bool IsActive();
+  bool Snoop(const SnoopData &s);
+  void Activate(int32_t for_ms);
+  int32_t TimeRemainingMs();
+
   uint8_t *buffer;
   size_t position = 0;
+
+ private:
   uint32_t end_ms = 0;
+
+  xSemaphoreHandle mu;
 };
 SnoopBuffer *get_snoop_buffer();
 constexpr size_t snoop_buffer_max_size = 50 * (1 << 10);
 bool add_to_snoop_buffer(const SnoopData &s);
-
 
 bool recv_over_uart(CanMessage *msg);
 bool send_over_uart(const CanMessage &msg);
@@ -45,14 +54,11 @@ void print_stats(P *printer, Stats *stats) {
   printer->printf(
       "can: tx %.2f/%.2f, rx: %.2f/%.2f | "
       "ser: tx %.2f/%.2f, rx: %.2f/%.2f | ser drops: %d\r\n",
-      float(stats->can_pkt_tx) * 1000.0 / millis(),
-      float(stats->can_tx_err) * 1000.0 / millis(),
-      float(stats->can_pkt_rx) * 1000.0 / millis(),
-      float(stats->can_rx_err) * 1000.0 / millis(),
-      float(stats->ser_pkt_tx) * 1000.0 / millis(),
-      float(stats->ser_tx_err) * 1000.0 / millis(),
-      float(stats->ser_pkt_rx) * 1000.0 / millis(),
-      float(stats->ser_rx_err) * 1000.0 / millis(), stats->ser_drops);
+      float(stats->can_pkt_tx) * 1000.0 / millis(), float(stats->can_tx_err) * 1000.0 / millis(),
+      float(stats->can_pkt_rx) * 1000.0 / millis(), float(stats->can_rx_err) * 1000.0 / millis(),
+      float(stats->ser_pkt_tx) * 1000.0 / millis(), float(stats->ser_tx_err) * 1000.0 / millis(),
+      float(stats->ser_pkt_rx) * 1000.0 / millis(), float(stats->ser_rx_err) * 1000.0 / millis(),
+      stats->ser_drops);
 }
 
 constexpr size_t send_recv_buffer_size = 1024;

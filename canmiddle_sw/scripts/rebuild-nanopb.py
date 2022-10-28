@@ -7,7 +7,7 @@ env.AddCustomTarget(
     actions=[
        " (cd proto; "
        "python ../.pio/libdeps/esp32doit-devkit-v1/Nanopb/generator/nanopb_generator.py  "
-       "--strip-path --output-dir=../lib/util message.proto)"
+       "--strip-path --output-dir=../lib/message message.proto)"
     ],
     title="Nanopb generate step",
     description="Rebuild .c/.h files from .proto"

@@ -12,7 +12,9 @@
 /* Enum definitions */
 typedef enum _Metadata_Source { 
     Metadata_Source_MASTER = 1, 
-    Metadata_Source_SLAVE = 2 
+    Metadata_Source_SLAVE = 2, 
+    Metadata_Source_MASTER_TX = 3, 
+    Metadata_Source_SLAVE_TX = 4 
 } Metadata_Source;
 
 /* Struct definitions */
@@ -55,8 +57,8 @@ typedef struct _SnoopData {
 
 /* Helper constants for enums */
 #define _Metadata_Source_MIN Metadata_Source_MASTER
-#define _Metadata_Source_MAX Metadata_Source_SLAVE
-#define _Metadata_Source_ARRAYSIZE ((Metadata_Source)(Metadata_Source_SLAVE+1))
+#define _Metadata_Source_MAX Metadata_Source_SLAVE_TX
+#define _Metadata_Source_ARRAYSIZE ((Metadata_Source)(Metadata_Source_SLAVE_TX+1))
 
 
 #ifdef __cplusplus

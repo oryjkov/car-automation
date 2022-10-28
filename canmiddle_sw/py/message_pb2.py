@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\";\n\nCanMessage\x12\x0c\n\x04prop\x18\x01 \x01(\r\x12\x10\n\x08\x65xtended\x18\x02 \x01(\x08\x12\r\n\x05value\x18\x03 \x01(\x0c\"?\n\x07Request\x12\x1f\n\nmessage_in\x18\x01 \x01(\x0b\x32\x0b.CanMessage\x12\x13\n\x0bplaceholder\x18\x02 \x02(\x08\"Q\n\x08Response\x12!\n\x0cmessages_out\x18\x01 \x03(\x0b\x32\x0b.CanMessage\x12\x13\n\x0bplaceholder\x18\x02 \x02(\x08\x12\r\n\x05\x64rops\x18\x03 \x01(\r\"^\n\x08Metadata\x12\x0f\n\x07recv_us\x18\x01 \x02(\x04\x12 \n\x06source\x18\x02 \x02(\x0e\x32\x10.Metadata.Source\"\x1f\n\x06Source\x12\n\n\x06MASTER\x10\x01\x12\t\n\x05SLAVE\x10\x02\"F\n\tSnoopData\x12\x1c\n\x07message\x18\x01 \x02(\x0b\x32\x0b.CanMessage\x12\x1b\n\x08metadata\x18\x02 \x02(\x0b\x32\t.Metadata')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\";\n\nCanMessage\x12\x0c\n\x04prop\x18\x01 \x01(\r\x12\x10\n\x08\x65xtended\x18\x02 \x01(\x08\x12\r\n\x05value\x18\x03 \x01(\x0c\"?\n\x07Request\x12\x1f\n\nmessage_in\x18\x01 \x01(\x0b\x32\x0b.CanMessage\x12\x13\n\x0bplaceholder\x18\x02 \x02(\x08\"Q\n\x08Response\x12!\n\x0cmessages_out\x18\x01 \x03(\x0b\x32\x0b.CanMessage\x12\x13\n\x0bplaceholder\x18\x02 \x02(\x08\x12\r\n\x05\x64rops\x18\x03 \x01(\r\"{\n\x08Metadata\x12\x0f\n\x07recv_us\x18\x01 \x02(\x04\x12 \n\x06source\x18\x02 \x02(\x0e\x32\x10.Metadata.Source\"<\n\x06Source\x12\n\n\x06MASTER\x10\x01\x12\t\n\x05SLAVE\x10\x02\x12\r\n\tMASTER_TX\x10\x03\x12\x0c\n\x08SLAVE_TX\x10\x04\"F\n\tSnoopData\x12\x1c\n\x07message\x18\x01 \x02(\x0b\x32\x0b.CanMessage\x12\x1b\n\x08metadata\x18\x02 \x02(\x0b\x32\t.Metadata')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'message_pb2', globals())
@@ -27,9 +27,9 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _RESPONSE._serialized_start=143
   _RESPONSE._serialized_end=224
   _METADATA._serialized_start=226
-  _METADATA._serialized_end=320
+  _METADATA._serialized_end=349
   _METADATA_SOURCE._serialized_start=289
-  _METADATA_SOURCE._serialized_end=320
-  _SNOOPDATA._serialized_start=322
-  _SNOOPDATA._serialized_end=392
+  _METADATA_SOURCE._serialized_end=349
+  _SNOOPDATA._serialized_start=351
+  _SNOOPDATA._serialized_end=421
 # @@protoc_insertion_point(module_scope)

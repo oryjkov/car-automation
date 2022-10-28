@@ -12,12 +12,15 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "message.pb.h"
+#include "model.h"
+#include "model_defs.h"
 #include "util.h"
 /* --------------------- Definitions and static variables ------------------ */
 
 // Example Configurations
 constexpr gpio_num_t TX_GPIO_NUM = GPIO_NUM_25;
 constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
+#define UPDATE_TASK_PRIO 7
 #define TX_TASK_PRIO 8     // Receiving task priority
 #define RX_TASK_PRIO 9     // Receiving task priority
 #define CTRL_TASK_PRIO 10  // Control task priority
@@ -27,17 +30,21 @@ static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
 static QueueHandle_t twai_tx_queue;
 static QueueHandle_t uart_tx_queue;
 
-static QueueHandle_t rx_queue;
-enum EventType {
-  CAN_MESSAGE = 1,
-  UART_MESSAGE = 2,
+struct UpdateTaskParams {
+  enum Command {
+    START,
+    STOP,
+  };
+  // Queue used to start/stop the updates task.
+  QueueHandle_t control_q;
+  SemaphoreHandle_t mu;
+  bool should_run;
+  Model<EspAbstraction> *model;
 };
-typedef struct QUEUE_ELEMENT {
-  EventType type;
-  CanMessage msg;
-  int64_t event_us;
-} QueueElement;
+UpdateTaskParams car_update;
+UpdateTaskParams display_update;
 
+static QueueHandle_t rx_queue;
 static void print_stats(void *arg) {
   while (true) {
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -52,6 +59,13 @@ static void twai_tx_task(void *arg) {
       ESP_LOGE(EXAMPLE_TAG, "queue recv failed on twai tx queue");
       continue;
     }
+
+    if (get_snoop_buffer()->IsActive()) {
+      get_snoop_buffer()->Snoop({.message = e->msg,
+                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                        .source = Metadata_Source_MASTER_TX}});
+    }
+
     twai_message_t tx_msg = {
         .extd = e->msg.has_extended,
         .identifier = e->msg.prop,
@@ -75,6 +89,13 @@ static void uart_tx_task(void *arg) {
       ESP_LOGE(EXAMPLE_TAG, "queue recv failed on uart tx queue");
       continue;
     }
+
+    if (get_snoop_buffer()->IsActive()) {
+      get_snoop_buffer()->Snoop({.message = e->msg,
+                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                        .source = Metadata_Source_SLAVE_TX}});
+    }
+
     if (!send_over_uart(e->msg)) {
       ESP_LOGE(EXAMPLE_TAG, "uart send failed");
     }
@@ -109,6 +130,11 @@ static void twai_receive_task(void *arg) {
         .event_us = esp_timer_get_time(),
     };
     memcpy(e->msg.value.bytes, rx_message.data, rx_message.data_length_code);
+    if (get_snoop_buffer()->IsActive()) {
+      get_snoop_buffer()->Snoop({.message = e->msg,
+                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                        .source = Metadata_Source_MASTER}});
+    }
     if (xQueueSendToBack(rx_queue, &e, 0) != pdTRUE) {
       free(e);
       ESP_LOGW(EXAMPLE_TAG, "failed to add can message to the event queue");
@@ -134,6 +160,13 @@ static void uart_receive_task(void *arg) {
     }
     e->event_us = esp_timer_get_time();
     ESP_LOGI(EXAMPLE_TAG, "Received msg on uart, prop: %d", e->msg.prop);
+
+    if (get_snoop_buffer()->IsActive()) {
+      get_snoop_buffer()->Snoop({.message = e->msg,
+                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                        .source = Metadata_Source_SLAVE}});
+    }
+
     if (xQueueSendToBack(rx_queue, &e, 0) != pdTRUE) {
       free(e);
       ESP_LOGW(EXAMPLE_TAG, "failed to add uart message to the event queue");
@@ -141,6 +174,22 @@ static void uart_receive_task(void *arg) {
     }
   }
   vTaskDelete(NULL);
+}
+
+static void send_state(void *arg) {
+  UpdateTaskParams *params = reinterpret_cast<UpdateTaskParams *>(arg);
+  UpdateTaskParams::Command cmd;
+  xQueuePeek(params->control_q, &cmd, portMAX_DELAY);
+  while (1) {
+    if (cmd == UpdateTaskParams::STOP) {
+      xQueuePeek(params->control_q, &cmd, portMAX_DELAY);
+    }
+    // This function is slow, so state stopping will only happen after sending is done.
+    params->model->SendState();
+    // Try to read a command. If nothing read, just continue with what we had.
+    // If something is read and it is a STOP, then the next loop will block.
+    xQueuePeek(params->control_q, &cmd, 0);
+  }
 }
 
 static void event_loop(void *arg) {
@@ -153,33 +202,50 @@ static void event_loop(void *arg) {
     }
     ESP_LOGI(EXAMPLE_TAG, "received an event of type %d", e->type);
     if (e->type == CAN_MESSAGE) {
+      /*
       // Queue up for transmission on the UART bus.
       if (xQueueSendToBack(uart_tx_queue, &e, 0) != pdTRUE) {
         free(e);
         ESP_LOGW(EXAMPLE_TAG, "failed to queue uart tx");
       }
-      if (get_snoop_buffer()->end_ms > millis()) {
-        add_to_snoop_buffer({.message = e->msg,
-                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                          .source = Metadata_Source_MASTER}});
-      }
+      */
+      // Update the Car model with the incoming value.
+      car_model->UpdateState(e->msg);
+      free(e);
     } else if (e->type == UART_MESSAGE) {
+      /*
       // Queue up for transmission on the TWAI bus.
       if (xQueueSendToBack(twai_tx_queue, &e, 0) != pdTRUE) {
         free(e);
         ESP_LOGW(EXAMPLE_TAG, "failed to queue twai tx");
       }
-      if (get_snoop_buffer()->end_ms > millis()) {
-        add_to_snoop_buffer({.message = e->msg,
-                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                          .source = Metadata_Source_SLAVE}});
-      }
+      */
+      display_model->UpdateState(e->msg);
+      free(e);
     } else {
       free(e);
       ESP_LOGE(EXAMPLE_TAG, "wrong event queue element type");
       abort();
     }
   }
+}
+
+void toggle_send_state(UpdateTaskParams::Command c, UpdateTaskParams *params) {
+  UpdateTaskParams::Command unused_cmd;
+  xQueueReceive(params->control_q, &unused_cmd, 0);
+  if (xQueueSendToBack(params->control_q, &c, 0) != pdTRUE) {
+    abort();
+  }
+}
+
+void start_send_state() {
+  toggle_send_state(UpdateTaskParams::START, &car_update);
+  toggle_send_state(UpdateTaskParams::START, &display_update);
+}
+
+void stop_send_state() {
+  toggle_send_state(UpdateTaskParams::STOP, &car_update);
+  toggle_send_state(UpdateTaskParams::STOP, &display_update);
 }
 
 void master_loop() {
@@ -207,6 +273,26 @@ void master_loop() {
     ESP_LOGE(EXAMPLE_TAG, "cant create a uart tx queue");
     abort();
   }
+
+  InitModels(twai_tx_queue, uart_tx_queue);
+
+  car_update.control_q = xQueueCreate(1, sizeof(UpdateTaskParams::Command));
+  car_update.model = car_model.get();
+  if (car_update.control_q == 0) {
+    ESP_LOGE(EXAMPLE_TAG, "cant create an queue");
+    abort();
+  }
+
+  display_update.control_q = xQueueCreate(1, sizeof(UpdateTaskParams::Command));
+  display_update.model = display_model.get();
+  if (display_update.control_q == 0) {
+    ESP_LOGE(EXAMPLE_TAG, "cant create an queue");
+    abort();
+  }
+  xTaskCreatePinnedToCore(send_state, "update_car", 4096, &car_update, UPDATE_TASK_PRIO, NULL,
+                          tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "update_dis", 4096, &display_update, UPDATE_TASK_PRIO, NULL,
+                          tskNO_AFFINITY);
 
   ESP_LOGE(EXAMPLE_TAG, "preparing event loop");
   ESP_ERROR_CHECK(twai_start());
