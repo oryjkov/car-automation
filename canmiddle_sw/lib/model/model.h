@@ -14,6 +14,11 @@ struct Value {
   uint8_t bytes[8];
 };
 
+// Property value used to indicate that nothing is to be sent, only trigger a delay.
+constexpr uint32_t DELAY_ONLY_PROP = 0;
+
+// A property is just a pair of (identifier, value). It is used to model the
+// properties exchanged on the CAN bus between the car and the display.
 struct Prop {
   // property id
   const uint32_t prop;
@@ -27,6 +32,9 @@ struct Prop {
   const uint32_t iteration;
 };
 
+// Models the state of an element - either the car or display (each has two models
+// which is done to keep the extended CAN properties separate. Extended properties
+// appear to be used as keep-alives/identifications and are not updated).
 template <typename A>
 struct Model {
   // Main properties in this model.
@@ -71,7 +79,7 @@ bool Model<A>::SendState(uint32_t iteration) {
     }
     esp.Delay(prop.send_delay_ms);
 
-    if (prop.prop != 0x0) {
+    if (prop.prop != DELAY_ONLY_PROP) {
       LockGuard<A> l(esp);
       CanMessage m;
       m.has_prop = true;

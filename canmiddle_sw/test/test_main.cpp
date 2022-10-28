@@ -30,6 +30,25 @@ TEST(ModelTest, SendState) {
   EXPECT_TRUE(m.SendState(1));
 }
 
+// Tests that only a delay is triggered for the special property.
+TEST(ModelTest, SendStateDelay) {
+  // clang-format off
+  Model<MockEspAbstraction> m = {.props = {
+	 {.prop = DELAY_ONLY_PROP, .send_delay_ms = 40, .val = {}},
+	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
+  }};
+  // clang-format on
+  MockEspAbstraction &esp = m.esp;
+  EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
+  EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
+  EXPECT_CALL(esp, Enqueue(AllOf(
+    Field(&CanMessage::has_prop, true),
+    Field(&CanMessage::prop, 0x053a)
+    )));
+
+  EXPECT_TRUE(m.SendState(1));
+}
+
 TEST(ModelTest, SendStateRepetitions) {
   // clang-format off
   Model<MockEspAbstraction> m = {.props = {
