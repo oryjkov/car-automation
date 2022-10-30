@@ -12,6 +12,8 @@
 #include "message.pb.h"
 #include "secrets.h"
 #include "util.h"
+#include "go.h"
+#include "model_defs.h"
 
 AsyncWebServer server(80);
 
@@ -102,6 +104,21 @@ void setup() {
       print_stats(response, get_stats());
       request->send(response);
     });
+    server.on("/doorOn", HTTP_GET, [](AsyncWebServerRequest *request) {
+      auto *m = display_model.get();
+      go([=]() { DoorOn(m); });
+      request->send(200, "text/plain", "door on");
+    });
+    server.on("/doorOff", HTTP_GET, [](AsyncWebServerRequest *request) {
+      auto *m = display_model.get();
+      go([=]() { DoorOn(m); });
+      request->send(200, "text/plain", "door off");
+    });
+    server.on("/lightsOff", HTTP_GET, [](AsyncWebServerRequest *request) {
+      auto *m = display_model.get();
+      go([=]() { LightsOff(m); });
+      request->send(200, "text/plain", "ligts off");
+    });
     server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
       start_send_state();
       request->send(200, "text/plain", "Started");
@@ -114,8 +131,9 @@ void setup() {
       if (get_snoop_buffer()->IsActive()) {
         request->send(400, "text/plain", "snoop is still active");
       } else {
-        AsyncWebServerResponse *response = request->beginResponse_P(
-            200, "application/octet-stream", get_snoop_buffer()->buffer, get_snoop_buffer()->position);
+        AsyncWebServerResponse *response =
+            request->beginResponse_P(200, "application/octet-stream", get_snoop_buffer()->buffer,
+                                     get_snoop_buffer()->position);
         request->send(response);
       }
     });

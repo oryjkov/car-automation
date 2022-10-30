@@ -37,6 +37,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
               // clang-format on
           },
       .esp = EspAbstraction(uart_q),
+      .can_enabled = true,
   }));
 
   car_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -45,6 +46,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
       },
       .esp = EspAbstraction(uart_q),
+      .can_enabled = true,
   }));
 
   display_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -68,6 +70,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
               // clang-format on
           },
       .esp = EspAbstraction(twai_q),
+      .can_enabled = true,
   }));
 
   display_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -85,6 +88,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b000046, .send_delay_ms = 100, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } } },
           },
       .esp = EspAbstraction(twai_q),
+      .can_enabled = true,
   }));
 
 

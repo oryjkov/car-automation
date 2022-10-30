@@ -43,6 +43,8 @@ struct Model {
   // Abstraction of the ESP32.
   A esp;
 
+  bool can_enabled;
+
   // Serializes the complete internal state into messages sent out on the queue.
   // Iteration starts at 1.
   // bool SendState();
@@ -50,7 +52,34 @@ struct Model {
 
   // Updates the internal state from the incoming message.
   bool UpdateState(const CanMessage &msg);
+
+  // Manual updates. Those are not stopped.
+  bool Update(uint32_t prop, const Value &v);
+
+  // Enables/Disables processing of CAN updates (those from the UpdateState()) function.
+  void SetCan(bool enable);
 };
+
+template <typename A>
+void Model<A>::SetCan(bool enable) {
+  LockGuard<A> l(esp);
+  can_enabled = enable;
+}
+
+template <typename A>
+bool Model<A>::Update(uint32_t p, const Value &v) {
+  for (auto &prop : props) {
+    if (prop.prop == p) {
+      if (prop.val.size != v.size) {
+        return false;
+      }
+      LockGuard<A> l(esp);
+      memcpy(prop.val.bytes, v.bytes, v.size);
+      return true;
+    }
+  }
+  return true;
+}
 
 template <typename A>
 bool Model<A>::UpdateState(const CanMessage &msg) {
@@ -63,7 +92,9 @@ bool Model<A>::UpdateState(const CanMessage &msg) {
         return false;
       }
       LockGuard<A> l(esp);
-      memcpy(prop.val.bytes, msg.value.bytes, msg.value.size);
+      if (can_enabled) {
+        memcpy(prop.val.bytes, msg.value.bytes, msg.value.size);
+      }
       return true;
     }
   }

@@ -15,9 +15,8 @@
 #include "model.h"
 #include "model_defs.h"
 #include "util.h"
-/* --------------------- Definitions and static variables ------------------ */
+#include "go.h"
 
-// Example Configurations
 constexpr gpio_num_t TX_GPIO_NUM = GPIO_NUM_25;
 constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
 #define UPDATE_TASK_PRIO 7
