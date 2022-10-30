@@ -32,6 +32,9 @@ int32_t SnoopBuffer::TimeRemainingMs() {
 
 bool SnoopBuffer::IsActive() {
   bool rv;
+  if (mu == nullptr) {
+    return false;
+  }
   xSemaphoreTake(mu, portMAX_DELAY);
   rv = (end_ms > millis());
   xSemaphoreGive(mu);

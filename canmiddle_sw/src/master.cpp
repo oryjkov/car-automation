@@ -11,11 +11,11 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "go.h"
 #include "message.pb.h"
 #include "model.h"
 #include "model_defs.h"
 #include "util.h"
-#include "go.h"
 
 constexpr gpio_num_t TX_GPIO_NUM = GPIO_NUM_25;
 constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
@@ -25,6 +25,7 @@ constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
 #define CTRL_TASK_PRIO 10  // Control task priority
 
 static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+static bool passthrough = false;
 
 static QueueHandle_t twai_tx_queue;
 static QueueHandle_t uart_tx_queue;
@@ -55,8 +56,8 @@ static void twai_tx_task(void *arg) {
 
     if (get_snoop_buffer()->IsActive()) {
       get_snoop_buffer()->Snoop({.message = e->msg,
-                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                        .source = Metadata_Source_MASTER_TX}});
+                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                              .source = Metadata_Source_MASTER_TX}});
     }
 
     twai_message_t tx_msg = {
@@ -85,8 +86,8 @@ static void uart_tx_task(void *arg) {
 
     if (get_snoop_buffer()->IsActive()) {
       get_snoop_buffer()->Snoop({.message = e->msg,
-                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                        .source = Metadata_Source_SLAVE_TX}});
+                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                              .source = Metadata_Source_SLAVE_TX}});
     }
 
     if (!send_over_uart(e->msg)) {
@@ -125,8 +126,8 @@ static void twai_receive_task(void *arg) {
     memcpy(e->msg.value.bytes, rx_message.data, rx_message.data_length_code);
     if (get_snoop_buffer()->IsActive()) {
       get_snoop_buffer()->Snoop({.message = e->msg,
-                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                        .source = Metadata_Source_MASTER}});
+                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                              .source = Metadata_Source_MASTER}});
     }
     if (xQueueSendToBack(rx_queue, &e, 0) != pdTRUE) {
       free(e);
@@ -156,8 +157,8 @@ static void uart_receive_task(void *arg) {
 
     if (get_snoop_buffer()->IsActive()) {
       get_snoop_buffer()->Snoop({.message = e->msg,
-                           .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                        .source = Metadata_Source_SLAVE}});
+                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                              .source = Metadata_Source_SLAVE}});
     }
 
     if (xQueueSendToBack(rx_queue, &e, 0) != pdTRUE) {
@@ -183,7 +184,7 @@ static void send_state(void *arg) {
     }
     // This function is slow, so state stopping will only happen after sending is done.
     model->SendState(iteration);
-    iteration = (iteration > 100) ? 100 : iteration+1;
+    iteration = (iteration > 100) ? 100 : iteration + 1;
     // Try to read a command. If nothing read, just continue with what we had.
     // If something is read and it is a STOP, then the next loop will block.
     xQueuePeek(control_q, &cmd, 0);
@@ -198,14 +199,9 @@ void toggle_send_state(Command c) {
   }
 }
 
-void start_send_state() {
-  toggle_send_state(START);
-}
+void start_send_state() { toggle_send_state(START); }
 
-void stop_send_state() {
-  toggle_send_state(STOP);
-}
-
+void stop_send_state() { toggle_send_state(STOP); }
 
 static void event_loop(void *arg) {
   ESP_LOGI(EXAMPLE_TAG, "starting event loop");
@@ -217,29 +213,31 @@ static void event_loop(void *arg) {
     }
     ESP_LOGI(EXAMPLE_TAG, "received an event of type %d", e->type);
     if (e->type == CAN_MESSAGE) {
-      /*
-      // Queue up for transmission on the UART bus.
-      if (xQueueSendToBack(uart_tx_queue, &e, 0) != pdTRUE) {
+      if (passthrough) {
+        // Queue up for transmission on the UART bus.
+        if (xQueueSendToBack(uart_tx_queue, &e, 0) != pdTRUE) {
+          free(e);
+          ESP_LOGW(EXAMPLE_TAG, "failed to queue uart tx");
+        }
+      } else {
+        // Update the Car model with the incoming value.
+        car_model->UpdateState(e->msg);
         free(e);
-        ESP_LOGW(EXAMPLE_TAG, "failed to queue uart tx");
       }
-      */
-      // Update the Car model with the incoming value.
-      car_model->UpdateState(e->msg);
-      free(e);
     } else if (e->type == UART_MESSAGE) {
-      /*
-      // Queue up for transmission on the TWAI bus.
-      if (xQueueSendToBack(twai_tx_queue, &e, 0) != pdTRUE) {
+      if (passthrough) {
+        // Queue up for transmission on the TWAI bus.
+        if (xQueueSendToBack(twai_tx_queue, &e, 0) != pdTRUE) {
+          free(e);
+          ESP_LOGW(EXAMPLE_TAG, "failed to queue twai tx");
+        }
+      } else {
+        display_model->UpdateState(e->msg);
+        if (e->msg.prop == 0x1b000046) {
+          start_send_state();
+        }
         free(e);
-        ESP_LOGW(EXAMPLE_TAG, "failed to queue twai tx");
       }
-      */
-      display_model->UpdateState(e->msg);
-      if (e->msg.prop == 0x1b000046) {
-        start_send_state();
-      }
-      free(e);
     } else {
       free(e);
       ESP_LOGE(EXAMPLE_TAG, "wrong event queue element type");
@@ -248,7 +246,8 @@ static void event_loop(void *arg) {
   }
 }
 
-void master_loop() {
+void master_loop(bool p) {
+  passthrough = p;
   SemaphoreHandle_t done_sem = xSemaphoreCreateBinary();
 
   const twai_filter_config_t accept_all_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -282,10 +281,14 @@ void master_loop() {
     abort();
   }
 
-  xTaskCreatePinnedToCore(send_state, "upd_car", 4096, car_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(send_state, "upd_ext_car", 4096, car_ext_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(send_state, "upd_disp", 4096, display_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(send_state, "upd_ext_disp", 4096, display_ext_model.get(), UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_car", 4096, car_model.get(), UPDATE_TASK_PRIO, NULL,
+                          tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_ext_car", 4096, car_ext_model.get(), UPDATE_TASK_PRIO,
+                          NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_disp", 4096, display_model.get(), UPDATE_TASK_PRIO, NULL,
+                          tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(send_state, "upd_ext_disp", 4096, display_ext_model.get(),
+                          UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
 
   ESP_LOGE(EXAMPLE_TAG, "preparing event loop");
   ESP_ERROR_CHECK(twai_start());

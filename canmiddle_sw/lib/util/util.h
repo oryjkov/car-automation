@@ -22,7 +22,7 @@ struct SnoopBuffer {
  private:
   uint32_t end_ms = 0;
 
-  xSemaphoreHandle mu;
+  xSemaphoreHandle mu = nullptr;
 };
 SnoopBuffer *get_snoop_buffer();
 constexpr size_t snoop_buffer_max_size = 50 * (1 << 10);

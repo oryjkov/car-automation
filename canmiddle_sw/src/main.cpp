@@ -23,7 +23,7 @@ const char *password = SECRET_WIFI_PASSWORD;
 Preferences pref;
 
 void canbus_check();
-void master_loop();
+void master_loop(bool passthrough);
 void start_send_state();
 void stop_send_state();
 
@@ -162,11 +162,11 @@ void setup() {
 
     digitalWrite(LED_BUILTIN, 1);
     Serial.println("master_loop");
-    master_loop();
+    master_loop(false);
     Serial.println("master_loop returned");
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
-    master_loop();
+    master_loop(true);
   } else if (r == DEBUGGER) {
     digitalWrite(LED_BUILTIN, 0);
   } else if (r == MIRROR_ODD) {
