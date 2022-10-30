@@ -108,6 +108,18 @@ void setup() {
       print_stats(response, get_stats());
       request->send(response);
     });
+    server.on("/filter", HTTP_GET, [](AsyncWebServerRequest *request) {
+      if (!request->hasParam("k")) {
+        request->send(500, "text/plain", "k is required\r\n");
+        return;
+      }
+      uint32_t key;
+      sscanf(request->getParam("k")->value().c_str(), "%x", &key);
+      xSemaphoreTake(props_mu, portMAX_DELAY);
+      filtered_props.insert(key);
+      xSemaphoreGive(props_mu);
+      request->send(500, "text/plain", "ok\r\n");
+    });
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request) {
       if (!request->hasParam("k") || !request->hasParam("v")) {
         request->send(500, "text/plain", "k,v are required\r\n");

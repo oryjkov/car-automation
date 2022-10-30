@@ -10,7 +10,9 @@ extern std::unique_ptr<Model<EspAbstraction>> car_model;
 extern std::unique_ptr<Model<EspAbstraction>> display_model;
 extern std::unique_ptr<Model<EspAbstraction>> car_ext_model;
 extern std::unique_ptr<Model<EspAbstraction>> display_ext_model;
-extern std::set<uint32_t> selected_props;
+
+extern SemaphoreHandle_t props_mu;
+extern std::set<uint32_t> filtered_props;
 
 void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q);
 
@@ -53,7 +55,7 @@ void LightDoor(M *m, uint8_t i, bool off) {
   uint8_t data[] = {0x00, 0x08, 0x00, i};
   m->UpdateMask(0x526, 4, mask, data);
   if (off) {
-  m->esp.Delay(300);
+    m->esp.Delay(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
     m->UpdateMask(0x526, 4, mask, data);
@@ -66,7 +68,7 @@ void LightOutsideKitchen(M *m, uint8_t i, bool off) {
   uint8_t data[] = {0x00, 0x07, i, 0x00};
   m->UpdateMask(0x526, 4, mask, data);
   if (off) {
-  m->esp.Delay(300);
+    m->esp.Delay(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
     m->UpdateMask(0x526, 4, mask, data);
@@ -79,7 +81,7 @@ void LightTailgate(M *m, uint8_t i, bool off) {
   uint8_t data[] = {i, 0x06, 0x00, 0x00};
   m->UpdateMask(0x526, 4, mask, data);
   if (off) {
-  m->esp.Delay(300);
+    m->esp.Delay(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
     m->UpdateMask(0x526, 4, mask, data);
@@ -95,7 +97,7 @@ void LightInsideKitchen(M *m, uint8_t i, bool off) {
   uint8_t data2[] = {0x00, i, 0x00, 0x00, 0x00};
   m->UpdateMask(0x525, 5, mask2, data2);
   if (off) {
-  m->esp.Delay(300);
+    m->esp.Delay(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
     m->UpdateMask(0x526, 4, mask, data);

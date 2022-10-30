@@ -9,7 +9,8 @@
 #include "esp_abstraction.h"
 
 using std::vector;
-extern std::set<uint32_t> selected_props;
+extern std::set<uint32_t> filtered_props;
+extern SemaphoreHandle_t props_mu;
 
 struct Value {
   size_t size;
@@ -38,13 +39,15 @@ struct Prop {
 #include "Arduino.h"
 template <typename V>
 void PrintIfSelected(uint32_t p, const V &v, const uint8_t *old_v) {
-  if (selected_props.count(p) > 0 && memcmp(old_v, v.bytes, v.size) != 0) {
+  xSemaphoreTake(props_mu, portMAX_DELAY);
+  if (filtered_props.count(p) == 0 && memcmp(old_v, v.bytes, v.size) != 0) {
     Serial.printf("[%05d] 0x%04x: ", millis(), p);
     for (int i = 0; i < v.size; i++) {
       Serial.printf("0x%02x ", v.bytes[i]);
     }
     Serial.println();
   }
+  xSemaphoreGive(props_mu);
 }
 #else
 template <typename V>
@@ -52,7 +55,6 @@ void PrintIfSelected(uint32_t p, const V &v, const Value &old_v) {
   return;
 }
 #endif
-
 
 // Models the state of an element - either the car or display (each has two models
 // which is done to keep the extended CAN properties separate. Extended properties
@@ -87,7 +89,7 @@ struct Model {
 template <typename A>
 void Model<A>::DisableCanFor(uint32_t ms) {
   LockGuard<A> l(esp);
-  can_enable_at_ms = millis()+ms;
+  can_enable_at_ms = millis() + ms;
 }
 
 template <typename A>

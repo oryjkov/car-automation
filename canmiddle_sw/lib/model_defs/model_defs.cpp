@@ -9,7 +9,9 @@ std::unique_ptr<Model<EspAbstraction>> car_model{};
 std::unique_ptr<Model<EspAbstraction>> display_model{};
 std::unique_ptr<Model<EspAbstraction>> car_ext_model{};
 std::unique_ptr<Model<EspAbstraction>> display_ext_model{};
-std::set<uint32_t> selected_props;
+
+SemaphoreHandle_t props_mu;
+std::set<uint32_t> filtered_props;
 
 void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
   car_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -93,6 +95,10 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
       .can_enable_at_ms = 0,
   }));
 
-  //selected_props = {0x53a, };
-  selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
+  props_mu = xSemaphoreCreateMutex();
+  if (props_mu == nullptr) {
+    abort();
+  }
+  filtered_props = {0x53a, };
+  //selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
 }
