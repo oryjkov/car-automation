@@ -4,6 +4,7 @@
 #include "message.pb.h"
 
 #define EXAMPLE_TAG "TWAI Self Test"
+
 enum EventType {
   CAN_MESSAGE = 1,
   UART_MESSAGE = 2,
@@ -41,6 +42,7 @@ struct EspAbstraction {
   void Lock();
   void Unlock();
   void Enqueue(const CanMessage& msg);
+  uint32_t Millis();
 
   EspAbstraction(QueueHandle_t q);
   ~EspAbstraction();
@@ -59,6 +61,7 @@ struct MockEspAbstraction {
   MOCK_METHOD(void, Lock, (), ());
   MOCK_METHOD(void, Unlock, (), ());
   MOCK_METHOD(void, Enqueue, (const CanMessage& msg), ());
+  MOCK_METHOD(uint32_t, Millis, (), ());
 };
 #endif
 

@@ -3,11 +3,13 @@
 
 #include <stdlib.h>
 
+#include <set>
 #include <vector>
 
 #include "esp_abstraction.h"
 
 using std::vector;
+extern std::set<uint32_t> selected_props;
 
 struct Value {
   size_t size;
@@ -32,6 +34,26 @@ struct Prop {
   const uint32_t iteration;
 };
 
+#if defined(ARDUINO)
+#include "Arduino.h"
+template <typename V>
+void PrintIfSelected(uint32_t p, const V &v, const uint8_t *old_v) {
+  if (selected_props.count(p) > 0 && memcmp(old_v, v.bytes, v.size) != 0) {
+    Serial.printf("[%05d] 0x%04x: ", millis(), p);
+    for (int i = 0; i < v.size; i++) {
+      Serial.printf("0x%02x ", v.bytes[i]);
+    }
+    Serial.println();
+  }
+}
+#else
+template <typename V>
+void PrintIfSelected(uint32_t p, const V &v, const Value &old_v) {
+  return;
+}
+#endif
+
+
 // Models the state of an element - either the car or display (each has two models
 // which is done to keep the extended CAN properties separate. Extended properties
 // appear to be used as keep-alives/identifications and are not updated).
@@ -43,7 +65,7 @@ struct Model {
   // Abstraction of the ESP32.
   A esp;
 
-  bool can_enabled;
+  uint32_t can_enable_at_ms;
 
   // Serializes the complete internal state into messages sent out on the queue.
   // Iteration starts at 1.
@@ -55,15 +77,42 @@ struct Model {
 
   // Manual updates. Those are not stopped.
   bool Update(uint32_t prop, const Value &v);
+  bool UpdateMask(uint32_t prop, size_t len, uint8_t mask[], uint8_t data[]);
 
-  // Enables/Disables processing of CAN updates (those from the UpdateState()) function.
-  void SetCan(bool enable);
+  // Temporarily disables processing of CAN updates (those from the UpdateState()) function.
+  void DisableCanFor(uint32_t ms);
+  bool canEnabled();
 };
 
 template <typename A>
-void Model<A>::SetCan(bool enable) {
+void Model<A>::DisableCanFor(uint32_t ms) {
   LockGuard<A> l(esp);
-  can_enabled = enable;
+  can_enable_at_ms = millis()+ms;
+}
+
+template <typename A>
+bool Model<A>::canEnabled() {
+  // TODO 32bit int overflow
+  return (millis() > can_enable_at_ms);
+}
+
+template <typename A>
+bool Model<A>::UpdateMask(uint32_t p, size_t len, uint8_t mask[], uint8_t data[]) {
+  for (auto &prop : props) {
+    if (prop.prop == p) {
+      if (prop.val.size != len) {
+        abort();
+      }
+
+      LockGuard<A> l(esp);
+      for (int i = 0; i < len; i++) {
+        prop.val.bytes[i] = prop.val.bytes[i] & (~mask[i]) | data[i] & mask[i];
+      }
+      PrintIfSelected(p, prop.val, mask);
+      return true;
+    }
+  }
+  return true;
 }
 
 template <typename A>
@@ -73,6 +122,8 @@ bool Model<A>::Update(uint32_t p, const Value &v) {
       if (prop.val.size != v.size) {
         return false;
       }
+      PrintIfSelected(p, v, prop.val.bytes);
+
       LockGuard<A> l(esp);
       memcpy(prop.val.bytes, v.bytes, v.size);
       return true;
@@ -92,7 +143,8 @@ bool Model<A>::UpdateState(const CanMessage &msg) {
         return false;
       }
       LockGuard<A> l(esp);
-      if (can_enabled) {
+      if (canEnabled()) {
+        PrintIfSelected(msg.prop, msg.value, prop.val.bytes);
         memcpy(prop.val.bytes, msg.value.bytes, msg.value.size);
       }
       return true;

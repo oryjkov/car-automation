@@ -9,11 +9,15 @@
 
 #include "driver/gpio.h"
 #include "driver/uart.h"
+#include "go.h"
 #include "message.pb.h"
+#include "model_defs.h"
 #include "secrets.h"
 #include "util.h"
-#include "go.h"
-#include "model_defs.h"
+
+uint8_t hexdigit(char hex) { return (hex <= '9') ? hex - '0' : toupper(hex) - 'A' + 10; }
+
+uint8_t hexbyte(const char *hex) { return (hexdigit(*hex) << 4) | hexdigit(*(hex + 1)); }
 
 AsyncWebServer server(80);
 
@@ -104,15 +108,71 @@ void setup() {
       print_stats(response, get_stats());
       request->send(response);
     });
-    server.on("/doorOn", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request) {
+      if (!request->hasParam("k") || !request->hasParam("v")) {
+        request->send(500, "text/plain", "k,v are required\r\n");
+        return;
+      }
+      uint32_t key;
+      sscanf(request->getParam("k")->value().c_str(), "%x", &key);
+      if (request->getParam("v")->value().length() > 16) {
+        request->send(500, "text/plain", "v is too long\r\n");
+        return;
+      }
+      if (request->getParam("v")->value().length() % 2 != 0) {
+        request->send(500, "text/plain", "v must be of even length\r\n");
+        return;
+      }
+      auto param_v = request->getParam("v")->value();
+      Value val;
+      val.size = param_v.length() / 2;
+      for (int i = 0; i < val.size; i++) {
+        val.bytes[i] = hexbyte(param_v.c_str() + i * 2);
+      }
       auto *m = display_model.get();
-      go([=]() { DoorOn(m); });
-      request->send(200, "text/plain", "door on");
+      go([=]() { DebugSet(m, key, val); });
+
+      request->send(500, "text/plain", "ok\r\n");
+    });
+    server.on("/setLight", HTTP_GET, [](AsyncWebServerRequest *request) {
+      if (!request->hasParam("light")) {
+        request->send(500, "text/plain", "light is required");
+        return;
+      }
+      auto light = request->getParam("light")->value();
+      int i = 70;
+      if (request->hasParam("i")) {
+        auto p = request->getParam("i");
+        if (p != nullptr) {
+          i = p->value().toInt();
+        }
+      }
+      bool off = (i == 0);
+      if (i < 1) {
+        i = 1;
+      }
+      if (i > 100) {
+        i = 100;
+      }
+      auto *m = display_model.get();
+      if (light == "Door") {
+        go([=]() { LightDoor(m, i, off); });
+      } else if (light == "OutsideKitchen") {
+        go([=]() { LightOutsideKitchen(m, i, off); });
+      } else if (light == "Tailgate") {
+        go([=]() { LightTailgate(m, i, off); });
+      } else if (light == "InsideKitchen") {
+        go([=]() { LightInsideKitchen(m, i, off); });
+      } else {
+        request->send(500, "text/plain", "light unknown");
+        return;
+      }
+      request->send(200, "text/plain", "ok");
     });
     server.on("/doorOff", HTTP_GET, [](AsyncWebServerRequest *request) {
       auto *m = display_model.get();
-      go([=]() { DoorOn(m); });
-      request->send(200, "text/plain", "door off");
+      go([=]() { DoorOff(m); });
+      request->send(200, "text/plain", "ligts off");
     });
     server.on("/lightsOff", HTTP_GET, [](AsyncWebServerRequest *request) {
       auto *m = display_model.get();

@@ -299,7 +299,7 @@ void master_loop(bool p) {
   xTaskCreatePinnedToCore(uart_receive_task, "UART_rx", 4096, NULL, RX_TASK_PRIO, NULL,
                           tskNO_AFFINITY);
   xTaskCreatePinnedToCore(event_loop, "loop", 4096, NULL, CTRL_TASK_PRIO, NULL, tskNO_AFFINITY);
-  xTaskCreatePinnedToCore(print_stats, "stats", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
+  //xTaskCreatePinnedToCore(print_stats, "stats", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
   xSemaphoreTake(done_sem, portMAX_DELAY);
   // event_loop();
   ESP_ERROR_CHECK(twai_stop());

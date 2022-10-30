@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <memory>
+#include <set>
 
 #include "esp_abstraction.h"
 #include "model.h"
@@ -8,6 +9,7 @@ std::unique_ptr<Model<EspAbstraction>> car_model{};
 std::unique_ptr<Model<EspAbstraction>> display_model{};
 std::unique_ptr<Model<EspAbstraction>> car_ext_model{};
 std::unique_ptr<Model<EspAbstraction>> display_ext_model{};
+std::set<uint32_t> selected_props;
 
 void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
   car_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -37,7 +39,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
               // clang-format on
           },
       .esp = EspAbstraction(uart_q),
-      .can_enabled = true,
+      .can_enable_at_ms = 0,
   }));
 
   car_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -46,7 +48,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
       },
       .esp = EspAbstraction(uart_q),
-      .can_enabled = true,
+      .can_enable_at_ms = 0,
   }));
 
   display_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -70,7 +72,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
               // clang-format on
           },
       .esp = EspAbstraction(twai_q),
-      .can_enabled = true,
+      .can_enable_at_ms = 0,
   }));
 
   display_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -88,8 +90,9 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b000046, .send_delay_ms = 100, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } } },
           },
       .esp = EspAbstraction(twai_q),
-      .can_enabled = true,
+      .can_enable_at_ms = 0,
   }));
 
-
+  //selected_props = {0x53a, };
+  selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
 }
