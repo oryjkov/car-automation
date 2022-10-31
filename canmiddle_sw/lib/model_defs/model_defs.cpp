@@ -1,7 +1,9 @@
 #include <stdint.h>
+
 #include <memory>
 #include <set>
 
+#include "Arduino.h"
 #include "esp_abstraction.h"
 #include "model.h"
 
@@ -14,10 +16,13 @@ SemaphoreHandle_t props_mu;
 std::set<uint32_t> filtered_props;
 
 void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
-  car_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
-      .props =
-          {
-              // clang-format off
+  car_model =
+      std::unique_ptr<Model<EspAbstraction>>(
+          new Model<EspAbstraction>(
+              {
+                  .props =
+                      {
+                          // clang-format off
 { .prop = DELAY_ONLY_PROP, .send_delay_ms = 82, .val={}, .iteration = 1 },  // offset
 { .prop = 0x052a, .send_delay_ms =  0, .val = { .size = 1, .bytes = { 0x3a,   } } },
 { .prop = 0x0532, .send_delay_ms =  0, .val = { .size = 5, .bytes = { 0x00, 0x04, 0x01, 0x04, 0x01,   } } },
@@ -38,19 +43,21 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x052c, .send_delay_ms =  0, .val = { .size = 7, .bytes = { 0x05, 0x0c, 0x2f, 0x39, 0x01, 0x02, 0x54,   } } },
 { .prop = 0x0533, .send_delay_ms =  0, .val = { .size = 3, .bytes = { 0x00, 0x37, 0x37,   } } },
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  40, },
-              // clang-format on
-          },
-      .esp = EspAbstraction(uart_q),
-      .can_enable_at_ms = 0,
-  }));
+                          // clang-format on
+                      },
+                  .esp = EspAbstraction(uart_q),
+                  .can_enable_at_us = 0,
+              }));
 
   car_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
       .props = {
+              // clang-format off
 { .prop = 0x1b00002c, .send_delay_ms =  22, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
+              // clang-format on
       },
       .esp = EspAbstraction(uart_q),
-      .can_enable_at_ms = 0,
+      .can_enable_at_us = 0,
   }));
 
   display_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
@@ -74,10 +81,11 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
               // clang-format on
           },
       .esp = EspAbstraction(twai_q),
-      .can_enable_at_ms = 0,
+      .can_enable_at_us = 0,
   }));
 
   display_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
+              // clang-format off
       .props = {
 { .prop = 0x1b000046, .send_delay_ms =   0, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
 { .prop = 0x1b000046, .send_delay_ms =  10, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 2 },
@@ -91,14 +99,101 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b000046, .send_delay_ms =  10, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 10 },
 { .prop = 0x1b000046, .send_delay_ms = 100, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } } },
           },
+              // clang-format on
       .esp = EspAbstraction(twai_q),
-      .can_enable_at_ms = 0,
+      .can_enable_at_us = 0,
   }));
 
   props_mu = xSemaphoreCreateMutex();
   if (props_mu == nullptr) {
     abort();
   }
-  filtered_props = {0x53a, };
-  //selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
+  filtered_props = {
+      0x53a,
+  };
+  // selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
+}
+
+void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {
+  if (memcmp(old_v, new_v, len) == 0) {
+    return;
+  }
+
+  if (prop == 0x528) {
+    // Light status update.
+  }
+
+  xSemaphoreTake(props_mu, portMAX_DELAY);
+  if (filtered_props.count(prop) == 0) {
+    Serial.printf("[%05d] 0x%04x: ", millis(), prop);
+    for (int i = 0; i < len; i++) {
+      Serial.printf("0x%02x ", new_v[i]);
+    }
+    Serial.println();
+  }
+  xSemaphoreGive(props_mu);
+}
+
+void LightsOff() {
+  display_model->DisableCanFor(1100);
+  display_model->Update(0x525, {.size = 5, .bytes = {0x8d, 0x46, 0x46, 0x1e, 0x1e}});
+  display_model->esp.Delay(300);
+  // The following clears out the active light (and also turns that off).
+  // This line is only necessary when byte 3 of 0x528 is non-zero (i.e.
+  // there is an active light).
+  display_model->Update(0x526, {.size = 4, .bytes = {0x46, 0x00, 0x46, 0x46}});
+  display_model->esp.Delay(700);
+  display_model->Update(0x525, {.size = 5, .bytes = {0x8c, 0x46, 0x46, 0x1e, 0x1e}});
+}
+
+void LightDoor(uint8_t i, bool off) {
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {0x00, 0xff, 0x00, 0xff};
+  uint8_t data[] = {0x00, 0x08, 0x00, i};
+  display_model->UpdateMasked(0x526, 4, mask, data);
+  if (off) {
+    display_model->esp.Delay(300);
+    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
+    display_model->UpdateMasked(0x526, 4, mask, data);
+  }
+}
+void LightOutsideKitchen(uint8_t i, bool off) {
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {0x00, 0xff, 0xff, 0x00};
+  uint8_t data[] = {0x00, 0x07, i, 0x00};
+  display_model->UpdateMasked(0x526, 4, mask, data);
+  if (off) {
+    display_model->esp.Delay(300);
+    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
+    display_model->UpdateMasked(0x526, 4, mask, data);
+  }
+}
+void LightTailgate(uint8_t i, bool off) {
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {0xff, 0xff, 0x00, 0x00};
+  uint8_t data[] = {i, 0x06, 0x00, 0x00};
+  display_model->UpdateMasked(0x526, 4, mask, data);
+  if (off) {
+    display_model->esp.Delay(300);
+    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
+    display_model->UpdateMasked(0x526, 4, mask, data);
+  }
+}
+void LightInsideKitchen(uint8_t i, bool off) {
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+  uint8_t data[] = {0x00, 0x02, 0x00, 0x00};
+  display_model->UpdateMasked(0x526, 4, mask, data);
+  uint8_t mask2[] = {0x00, 0xff, 0x00, 0x00, 0x00};
+  uint8_t data2[] = {0x00, i, 0x00, 0x00, 0x00};
+  display_model->UpdateMasked(0x525, 5, mask2, data2);
+  if (off) {
+    display_model->esp.Delay(300);
+    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
+    display_model->UpdateMasked(0x526, 4, mask, data);
+  }
 }

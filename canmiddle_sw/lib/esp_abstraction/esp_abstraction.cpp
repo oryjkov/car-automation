@@ -4,6 +4,7 @@
 
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -12,6 +13,7 @@
 void EspAbstraction::Delay(int ms) { vTaskDelay(pdTICKS_TO_MS(ms)); };
 void EspAbstraction::Lock() { xSemaphoreTake(sem, portMAX_DELAY); }
 void EspAbstraction::Unlock() { xSemaphoreGive(sem); }
+int64_t EspAbstraction::Micros() { return esp_timer_get_time(); }
 void EspAbstraction::Enqueue(const CanMessage &msg) {
   QueueElement *e = reinterpret_cast<QueueElement *>(malloc(sizeof(QueueElement)));
   if (e == nullptr) {

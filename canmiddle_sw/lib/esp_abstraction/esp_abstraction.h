@@ -42,7 +42,7 @@ struct EspAbstraction {
   void Lock();
   void Unlock();
   void Enqueue(const CanMessage& msg);
-  uint32_t Millis();
+  int64_t Micros();
 
   EspAbstraction(QueueHandle_t q);
   ~EspAbstraction();

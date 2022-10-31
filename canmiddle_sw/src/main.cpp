@@ -16,6 +16,7 @@
 #include "model_defs.h"
 #include "secrets.h"
 #include "util.h"
+#include "mqtt.h"
 
 uint8_t hexdigit(char hex) { return (hex <= '9') ? hex - '0' : toupper(hex) - 'A' + 10; }
 uint8_t hexbyte(const char *hex) { return (hexdigit(*hex) << 4) | hexdigit(*(hex + 1)); }
@@ -28,18 +29,12 @@ AsyncWebServer server(80);
 const char *ssid = SECRET_WIFI_SSID;
 const char *password = SECRET_WIFI_PASSWORD;
 
-AsyncMqttClient mqttClient;
-TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
+extern TimerHandle_t mqttReconnectTimer;
 
 void connectToWifi() {
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
-}
-
-void connectToMqtt() {
-  Serial.println("Connecting to MQTT...");
-  //mqttClient.connect();
 }
 
 void WiFiEvent(WiFiEvent_t event) {
@@ -62,69 +57,6 @@ void WiFiEvent(WiFiEvent_t event) {
   }
 }
 
-void onMqttConnect(bool sessionPresent) {
-  Serial.println("Connected to MQTT.");
-  Serial.print("Session present: ");
-  Serial.println(sessionPresent);
-  uint16_t packetIdSub = mqttClient.subscribe("test/lol", 2);
-  Serial.print("Subscribing at QoS 2, packetId: ");
-  Serial.println(packetIdSub);
-  mqttClient.publish("test/lol", 0, true, "test 1");
-  Serial.println("Publishing at QoS 0");
-  uint16_t packetIdPub1 = mqttClient.publish("test/lol", 1, true, "test 2");
-  Serial.print("Publishing at QoS 1, packetId: ");
-  Serial.println(packetIdPub1);
-  uint16_t packetIdPub2 = mqttClient.publish("test/lol", 2, true, "test 3");
-  Serial.print("Publishing at QoS 2, packetId: ");
-  Serial.println(packetIdPub2);
-}
-
-void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println("Disconnected from MQTT.");
-
-  if (WiFi.isConnected()) {
-    xTimerStart(mqttReconnectTimer, 0);
-  }
-}
-
-void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
-  Serial.println("Subscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-  Serial.print("  qos: ");
-  Serial.println(qos);
-}
-
-void onMqttUnsubscribe(uint16_t packetId) {
-  Serial.println("Unsubscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-}
-
-void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties,
-                   size_t len, size_t index, size_t total) {
-  Serial.println("Publish received.");
-  Serial.print("  topic: ");
-  Serial.println(topic);
-  Serial.print("  qos: ");
-  Serial.println(properties.qos);
-  Serial.print("  dup: ");
-  Serial.println(properties.dup);
-  Serial.print("  retain: ");
-  Serial.println(properties.retain);
-  Serial.print("  len: ");
-  Serial.println(len);
-  Serial.print("  index: ");
-  Serial.println(index);
-  Serial.print("  total: ");
-  Serial.println(total);
-}
-
-void onMqttPublish(uint16_t packetId) {
-  Serial.println("Publish acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-}
 
 void canbus_check();
 void master_loop();
@@ -199,14 +131,8 @@ void setup() {
                                       reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
     WiFi.onEvent(WiFiEvent);
-    mqttClient.onConnect(onMqttConnect);
-    mqttClient.onDisconnect(onMqttDisconnect);
-    mqttClient.onSubscribe(onMqttSubscribe);
-    mqttClient.onUnsubscribe(onMqttUnsubscribe);
-    mqttClient.onMessage(onMqttMessage);
-    mqttClient.onPublish(onMqttPublish);
-    mqttClient.setServer(MQTT_HOST, MQTT_PORT);
 
+    mqttClientStart(MQTT_HOST, MQTT_PORT);
     connectToWifi();
     get_snoop_buffer()->Init();
 
@@ -252,51 +178,6 @@ void setup() {
       go([=]() { DebugSet(m, key, val); });
 
       request->send(500, "text/plain", "ok\r\n");
-    });
-    server.on("/setLight", HTTP_GET, [](AsyncWebServerRequest *request) {
-      if (!request->hasParam("light")) {
-        request->send(500, "text/plain", "light is required");
-        return;
-      }
-      auto light = request->getParam("light")->value();
-      int i = 70;
-      if (request->hasParam("i")) {
-        auto p = request->getParam("i");
-        if (p != nullptr) {
-          i = p->value().toInt();
-        }
-      }
-      bool off = (i == 0);
-      if (i < 1) {
-        i = 1;
-      }
-      if (i > 100) {
-        i = 100;
-      }
-      auto *m = display_model.get();
-      if (light == "Door") {
-        go([=]() { LightDoor(m, i, off); });
-      } else if (light == "OutsideKitchen") {
-        go([=]() { LightOutsideKitchen(m, i, off); });
-      } else if (light == "Tailgate") {
-        go([=]() { LightTailgate(m, i, off); });
-      } else if (light == "InsideKitchen") {
-        go([=]() { LightInsideKitchen(m, i, off); });
-      } else {
-        request->send(500, "text/plain", "light unknown");
-        return;
-      }
-      request->send(200, "text/plain", "ok");
-    });
-    server.on("/doorOff", HTTP_GET, [](AsyncWebServerRequest *request) {
-      auto *m = display_model.get();
-      go([=]() { DoorOff(m); });
-      request->send(200, "text/plain", "ligts off");
-    });
-    server.on("/lightsOff", HTTP_GET, [](AsyncWebServerRequest *request) {
-      auto *m = display_model.get();
-      go([=]() { LightsOff(m); });
-      request->send(200, "text/plain", "ligts off");
     });
     server.on("/passthrough", HTTP_GET, [](AsyncWebServerRequest *request) {
       passthrough = true;
