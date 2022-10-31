@@ -25,7 +25,7 @@ constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
 #define CTRL_TASK_PRIO 10  // Control task priority
 
 static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
-static bool passthrough = false;
+bool passthrough = false;
 
 static QueueHandle_t twai_tx_queue;
 static QueueHandle_t uart_tx_queue;
@@ -246,8 +246,7 @@ static void event_loop(void *arg) {
   }
 }
 
-void master_loop(bool p) {
-  passthrough = p;
+void master_loop() {
   SemaphoreHandle_t done_sem = xSemaphoreCreateBinary();
 
   const twai_filter_config_t accept_all_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();

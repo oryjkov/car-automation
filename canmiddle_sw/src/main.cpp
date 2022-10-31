@@ -39,7 +39,7 @@ void connectToWifi() {
 
 void connectToMqtt() {
   Serial.println("Connecting to MQTT...");
-  mqttClient.connect();
+  //mqttClient.connect();
 }
 
 void WiFiEvent(WiFiEvent_t event) {
@@ -50,9 +50,11 @@ void WiFiEvent(WiFiEvent_t event) {
       Serial.println("IP address: ");
       Serial.println(WiFi.localIP());
       connectToMqtt();
+      server.begin();
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
       Serial.println("WiFi lost connection");
+      server.end();
       xTimerStop(mqttReconnectTimer,
                  0);  // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
       xTimerStart(wifiReconnectTimer, 0);
@@ -125,9 +127,10 @@ void onMqttPublish(uint16_t packetId) {
 }
 
 void canbus_check();
-void master_loop(bool passthrough);
+void master_loop();
 void start_send_state();
 void stop_send_state();
+extern bool passthrough;
 
 Preferences pref;
 enum Role : uint32_t {
@@ -295,6 +298,10 @@ void setup() {
       go([=]() { LightsOff(m); });
       request->send(200, "text/plain", "ligts off");
     });
+    server.on("/passthrough", HTTP_GET, [](AsyncWebServerRequest *request) {
+      passthrough = true;
+      request->send(200, "text/plain", "ok\r\n");
+    });
     server.on("/start", HTTP_GET, [](AsyncWebServerRequest *request) {
       start_send_state();
       request->send(200, "text/plain", "Started");
@@ -334,15 +341,16 @@ void setup() {
       }
       request->send(response);
     });
-    server.begin();
 
     digitalWrite(LED_BUILTIN, 1);
     Serial.println("master_loop");
-    master_loop(false);
+    passthrough = false;
+    master_loop();
     Serial.println("master_loop returned");
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
-    master_loop(true);
+    passthrough = true;
+    master_loop();
   } else if (r == DEBUGGER) {
     digitalWrite(LED_BUILTIN, 0);
   } else if (r == MIRROR_ODD) {
