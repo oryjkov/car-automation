@@ -6,6 +6,8 @@
 #include "Arduino.h"
 #include "esp_abstraction.h"
 #include "model.h"
+#include "mqtt.h"
+#include "go.h"
 
 std::unique_ptr<Model<EspAbstraction>> car_model{};
 std::unique_ptr<Model<EspAbstraction>> display_model{};
@@ -114,6 +116,19 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
   // selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
 }
 
+void PublishOnOff(bool state) {
+  String s = (state) ? "ON" : "OFF";
+  getMqttClient()->publish("car/light/outside_kitchen/status", 2, true, s.c_str(), s.length());
+}
+
+// Gets a bit from a byte array.
+bool getBit(uint8_t bit_num, const uint8_t *d) {
+  uint8_t byte_num = bit_num % 8;
+  bit_num = bit_num / 8;
+
+  return (d[byte_num] & (1 << bit_num)) == 0;
+}
+
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {
   if (memcmp(old_v, new_v, len) == 0) {
     return;
@@ -121,6 +136,11 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
 
   if (prop == 0x528) {
     // Light status update.
+
+    if (getBit(0, new_v) != getBit(0, old_v)) {
+      // Outside Kitchen light changes.
+      go([=]() { PublishOnOff(getBit(0, old_v)); });
+    }
   }
 
   xSemaphoreTake(props_mu, portMAX_DELAY);

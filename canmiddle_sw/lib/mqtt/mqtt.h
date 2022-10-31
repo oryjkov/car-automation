@@ -4,6 +4,9 @@
 #include "Arduino.h"
 #include <AsyncMqttClient.h>
 
+#include "mqtt.h"
+#include "model_defs.h"
+
 AsyncMqttClient *getMqttClient();
 
 void mqttClientStart(IPAddress ip, uint32_t port);
