@@ -5,9 +5,9 @@
 
 #include "Arduino.h"
 #include "esp_abstraction.h"
+#include "go.h"
 #include "model.h"
 #include "mqtt.h"
-#include "go.h"
 
 std::unique_ptr<Model<EspAbstraction>> car_model{};
 std::unique_ptr<Model<EspAbstraction>> display_model{};
@@ -116,30 +116,76 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
   // selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
 }
 
-void PublishOnOff(bool state) {
+void PublishOnOff(const String &light, bool state) {
   String s = (state) ? "ON" : "OFF";
-  getMqttClient()->publish("car/light/outside_kitchen/status", 2, true, s.c_str(), s.length());
+  getMqttClient()->publish(String("car/light/" + light + "/status").c_str(), 2, true, s.c_str(),
+                           s.length());
+}
+
+void PublishBrightness(const String &light, uint32_t brightness) {
+  String b = String(brightness);
+  getMqttClient()->publish(String("car/light/" + light + "/brightness").c_str(), 2, true, b.c_str(),
+                           b.length());
 }
 
 // Gets a bit from a byte array.
 bool getBit(uint8_t bit_num, const uint8_t *d) {
-  uint8_t byte_num = bit_num % 8;
-  bit_num = bit_num / 8;
+  uint8_t byte_num = bit_num / 8;
+  bit_num = bit_num % 8;
+  // bit 0 is the most significant bit.
+  bit_num = 7 - bit_num;
 
-  return (d[byte_num] & (1 << bit_num)) == 0;
+  return (d[byte_num] & (1 << bit_num)) != 0;
 }
+uint8_t getBrightnessByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num] & 0x7f; }
+
+struct LightPropMap {
+  String light;
+  size_t state_bit;        // from prop 0x528
+  size_t brightness_prop;  // either 0x527 or 0x528
+  size_t brightness_byte;  // byte num in the prop above. Only take 7 lower bits in that byte.
+};
+LightPropMap lmp[] = {
+    {
+        .light = "outside_kitchen",
+        .state_bit = 0,
+        .brightness_prop = 0x528,
+        .brightness_byte = 1,
+    },
+    {
+        .light = "inside_kitchen",
+        .state_bit = 5,
+        .brightness_prop = 0x527,
+        .brightness_byte = 1,
+    },
+    {
+        .light = "door",
+        .state_bit = 8,
+        .brightness_prop = 0x528,
+        .brightness_byte = 2,
+    },
+    {
+        .light = "tailgate",
+        .state_bit = 1,
+        .brightness_prop = 0x527,
+        .brightness_byte = 5,
+    },
+};
 
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {
   if (memcmp(old_v, new_v, len) == 0) {
     return;
   }
 
-  if (prop == 0x528) {
-    // Light status update.
-
-    if (getBit(0, new_v) != getBit(0, old_v)) {
-      // Outside Kitchen light changes.
-      go([=]() { PublishOnOff(getBit(0, old_v)); });
+  for (const auto &l : lmp) {
+    if (prop == 0x528 && (getBit(l.state_bit, new_v) != getBit(l.state_bit, old_v))) {
+      bool s = getBit(l.state_bit, new_v);
+      go([=]() { PublishOnOff(l.light, s); });
+    }
+    if (prop == l.brightness_prop && (getBrightnessByte(l.brightness_byte, new_v) !=
+                                      getBrightnessByte(l.brightness_byte, old_v))) {
+      uint8_t b = getBrightnessByte(l.brightness_byte, new_v);
+      go([=]() { PublishBrightness(l.light, b); });
     }
   }
 
