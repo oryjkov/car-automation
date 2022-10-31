@@ -139,36 +139,53 @@ bool getBit(uint8_t bit_num, const uint8_t *d) {
 }
 uint8_t getBrightnessByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num] & 0x7f; }
 
-struct LightPropMap {
-  String light;
+// Structure containing the CAN properties for getting/setting lights.
+struct LightDescriptor {
+  String light;            // String name - same as what's used in the mqtt topics.
   size_t state_bit;        // from prop 0x528
   size_t brightness_prop;  // either 0x527 or 0x528
   size_t brightness_byte;  // byte num in the prop above. Only take 7 lower bits in that byte.
+
+  uint8_t selector;        // Selector that is written to byte 1 of 0x526.
+  size_t set_brightness_prop;  // Property for setting the brightness.
+  size_t set_brightness_byte;  // Byte number for brightness. Only 7 lowest bits of that byte are used.
 };
-LightPropMap lmp[] = {
+LightDescriptor lmp[] = {
     {
         .light = "outside_kitchen",
         .state_bit = 0,
         .brightness_prop = 0x528,
         .brightness_byte = 1,
+        .selector = 7,
+        .set_brightness_prop = 0x526,
+        .set_brightness_byte = 2,
     },
     {
         .light = "inside_kitchen",
         .state_bit = 5,
         .brightness_prop = 0x527,
         .brightness_byte = 1,
+        .selector = 2,
+        .set_brightness_prop = 0x525,
+        .set_brightness_byte = 1,
     },
     {
         .light = "door",
         .state_bit = 8,
         .brightness_prop = 0x528,
         .brightness_byte = 2,
+        .selector = 8,
+        .set_brightness_prop = 0x526,
+        .set_brightness_byte = 3,
     },
     {
         .light = "tailgate",
         .state_bit = 1,
         .brightness_prop = 0x527,
         .brightness_byte = 5,
+        .selector = 6,
+        .set_brightness_prop = 0x526,
+        .set_brightness_byte = 0,
     },
 };
 
@@ -212,51 +229,35 @@ void LightsOff() {
   display_model->Update(0x525, {.size = 5, .bytes = {0x8c, 0x46, 0x46, 0x1e, 0x1e}});
 }
 
-void LightDoor(uint8_t i, bool off) {
-  display_model->DisableCanFor(600);
-  uint8_t mask[] = {0x00, 0xff, 0x00, 0xff};
-  uint8_t data[] = {0x00, 0x08, 0x00, i};
-  display_model->UpdateMasked(0x526, 4, mask, data);
-  if (off) {
-    display_model->esp.Delay(300);
-    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
-    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
-    display_model->UpdateMasked(0x526, 4, mask, data);
+void SetLight(const String &name, uint8_t i, bool off) {
+  bool found = false;
+  LightDescriptor &l = lmp[0];
+  for (const auto &_l : lmp) {
+    if (_l.light == name) {
+      found = true;
+      l = _l;
+    }
   }
-}
-void LightOutsideKitchen(uint8_t i, bool off) {
-  display_model->DisableCanFor(600);
-  uint8_t mask[] = {0x00, 0xff, 0xff, 0x00};
-  uint8_t data[] = {0x00, 0x07, i, 0x00};
-  display_model->UpdateMasked(0x526, 4, mask, data);
-  if (off) {
-    display_model->esp.Delay(300);
-    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
-    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
-    display_model->UpdateMasked(0x526, 4, mask, data);
+  if (!found) {
+    return;
   }
-}
-void LightTailgate(uint8_t i, bool off) {
   display_model->DisableCanFor(600);
-  uint8_t mask[] = {0xff, 0xff, 0x00, 0x00};
-  uint8_t data[] = {i, 0x06, 0x00, 0x00};
-  display_model->UpdateMasked(0x526, 4, mask, data);
-  if (off) {
-    display_model->esp.Delay(300);
-    uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
-    uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
-    display_model->UpdateMasked(0x526, 4, mask, data);
-  }
-}
-void LightInsideKitchen(uint8_t i, bool off) {
-  display_model->DisableCanFor(600);
+
+  // Set Selector.
   uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
-  uint8_t data[] = {0x00, 0x02, 0x00, 0x00};
+  uint8_t data[] = {0x00, l.selector, 0x00, 0x00};
   display_model->UpdateMasked(0x526, 4, mask, data);
-  uint8_t mask2[] = {0x00, 0xff, 0x00, 0x00, 0x00};
-  uint8_t data2[] = {0x00, i, 0x00, 0x00, 0x00};
-  display_model->UpdateMasked(0x525, 5, mask2, data2);
+
+  // Set Intensity. Mask and data have lenght of 5, as this is the max (prop 0x525).
+  uint8_t mask2[] = {0x00, 0x00, 0x00, 0x00, 0x00};
+  uint8_t data2[] = {0x00, 0x00, 0x00, 0x00, 0x00};
+  mask2[l.set_brightness_byte] = 0x7f;
+  data2[l.set_brightness_byte] = i;
+  // Pass in the lenght of 5, even though if l.brightness_prop==0x526, it is 4.
+  display_model->UpdateMasked(l.brightness_prop, 5, mask2, data2);
+
   if (off) {
+    // OFF is always the same, but we have to let the selector we just set propagate.
     display_model->esp.Delay(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};

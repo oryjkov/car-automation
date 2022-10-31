@@ -76,31 +76,31 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
 
   if (topic_str == "car/light/door/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { LightDoor(brightness, false); });
+    go([=]() { SetLight("door", brightness, false); });
   } else if (topic_str == "car/light/door/switch") {
     if (payload_str == "OFF") {
-      go([=]() { LightDoor(70, true); });
+      go([=]() { SetLight("door", 70, true); });
     }
   } else if (topic_str == "car/light/outside_kitchen/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { LightOutsideKitchen(brightness, false); });
+    go([=]() { SetLight("outside_kitchen", brightness, false); });
   } else if (topic_str == "car/light/outside_kitchen/switch") {
     if (payload_str == "OFF") {
-      go([=]() { LightOutsideKitchen(70, true); });
+      go([=]() { SetLight("outside_kitchen", 70, true); });
     }
   } else if (topic_str == "car/light/tailgate/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { LightTailgate(brightness, false); });
+    go([=]() { SetLight("tailgate", brightness, false); });
   } else if (topic_str == "car/light/tailgate/switch") {
     if (payload_str == "OFF") {
-      go([=]() { LightTailgate(70, true); });
+      go([=]() { SetLight("tailgate", 70, true); });
     }
   } else if (topic_str == "car/light/inside_kitchen/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { LightInsideKitchen(brightness, false); });
+    go([=]() { SetLight("inside_kitchen", brightness, false); });
   } else if (topic_str == "car/light/inside_kitchen/switch") {
     if (payload_str == "OFF") {
-      go([=]() { LightInsideKitchen(70, true); });
+      go([=]() { SetLight("inside_kitchen", 70, true); });
     }
   } else {
   }

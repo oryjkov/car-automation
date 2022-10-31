@@ -5,6 +5,7 @@
 #include <set>
 
 #include "model.h"
+#include "Arduino.h"
 
 extern std::unique_ptr<Model<EspAbstraction>> car_model;
 extern std::unique_ptr<Model<EspAbstraction>> display_model;
@@ -22,10 +23,7 @@ void DebugSet(M *m, uint32_t prop, const Value v) {
   m->Update(prop, v);
 }
 
+void SetLight(const String &name, uint8_t i, bool off);
 void LightsOff();
-void LightDoor(uint8_t i, bool off);
-void LightOutsideKitchen(uint8_t i, bool off);
-void LightTailgate(uint8_t i, bool off);
-void LightInsideKitchen(uint8_t i, bool off);
 
 #endif  // __MODEL_DEFS_H__

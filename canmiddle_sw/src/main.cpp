@@ -57,7 +57,6 @@ void WiFiEvent(WiFiEvent_t event) {
   }
 }
 
-
 void canbus_check();
 void master_loop();
 void start_send_state();
@@ -175,7 +174,10 @@ void setup() {
         val.bytes[i] = hexbyte(param_v.c_str() + i * 2);
       }
       auto *m = display_model.get();
+      auto *m2 = car_model.get();
       go([=]() { DebugSet(m, key, val); });
+      // this too - if prop is not known, then it gets dropped.
+      go([=]() { DebugSet(m2, key, val); });
 
       request->send(500, "text/plain", "ok\r\n");
     });

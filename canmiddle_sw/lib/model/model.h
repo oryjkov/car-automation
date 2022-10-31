@@ -84,12 +84,13 @@ template <typename A>
 bool Model<A>::UpdateMasked(uint32_t p, size_t len, uint8_t mask[], uint8_t data[]) {
   for (auto &prop : props) {
     if (prop.prop == p) {
-      if (prop.val.size != len) {
+      // Look the other way, as long as mask and data are long enough.
+      if (prop.val.size > len) {
         abort();
       }
 
       LockGuard<A> l(esp);
-      for (int i = 0; i < len; i++) {
+      for (int i = 0; i < prop.val.size; i++) {
         prop.val.bytes[i] = prop.val.bytes[i] & (~mask[i]) | data[i] & mask[i];
       }
       // Force printing by passing in mask
