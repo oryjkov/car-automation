@@ -146,9 +146,10 @@ struct LightDescriptor {
   size_t brightness_prop;  // either 0x527 or 0x528
   size_t brightness_byte;  // byte num in the prop above. Only take 7 lower bits in that byte.
 
-  uint8_t selector;        // Selector that is written to byte 1 of 0x526.
+  uint8_t selector;            // Selector that is written to byte 1 of 0x526.
   size_t set_brightness_prop;  // Property for setting the brightness.
-  size_t set_brightness_byte;  // Byte number for brightness. Only 7 lowest bits of that byte are used.
+  size_t
+      set_brightness_byte;  // Byte number for brightness. Only 7 lowest bits of that byte are used.
 };
 LightDescriptor lmp[] = {
     {
