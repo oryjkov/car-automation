@@ -4,6 +4,7 @@
 #include "Arduino.h"
 #include <AsyncMqttClient.h>
 
+#include "model.h"
 #include "mqtt.h"
 #include "model_defs.h"
 

@@ -1,8 +1,10 @@
 #include "Arduino.h"
 #include <WiFi.h>
 #include <AsyncMqttClient.h>
+
 #include "go.h"
 #include "mqtt.h"
+#include "model.h"
 #include "model_defs.h"
 
 AsyncMqttClient mqttClient;
