@@ -1,9 +1,10 @@
-#include "Arduino.h"
-#include <WiFi.h>
-#include <AsyncMqttClient.h>
-
-#include "go.h"
 #include "mqtt.h"
+
+#include <AsyncMqttClient.h>
+#include <WiFi.h>
+
+#include "Arduino.h"
+#include "go.h"
 #include "model.h"
 #include "model_defs.h"
 
@@ -11,14 +12,80 @@ AsyncMqttClient mqttClient;
 
 TimerHandle_t mqttReconnectTimer;
 
-AsyncMqttClient *getMqttClient() {
-    return &mqttClient;
+AsyncMqttClient *getMqttClient() { return &mqttClient; }
+
+static String hassConfig[] = {
+    R"END(
+{
+  "name": "Door light",
+  "state_topic": "car/light/door/status",
+  "command_topic": "car/light/door/switch",
+  "brightness_state_topic": "car/light/door/brightness",
+  "brightness_command_topic": "car/light/door/brightness/set",
+  "brightness_scale": 100,
+  "on_command_type": "brightness",
+  "payload_off": "OFF",
+  "optimistic": false
+  "dev": { "identifiers": "l1", }
 }
+)END",
+    R"END(
+{
+  "name": "Tailgate light",
+  "state_topic": "car/light/tailgate/status",
+  "command_topic": "car/light/tailgate/switch",
+  "brightness_state_topic": "car/light/tailgate/brightness",
+  "brightness_command_topic": "car/light/tailgate/brightness/set",
+  "brightness_scale": 100,
+  "on_command_type": "brightness",
+  "payload_off": "OFF",
+  "optimistic": false
+  "dev": { "identifiers": "l2", }
+}
+)END",
+    R"END(
+{
+  "name": "Inside Kitchen light",
+  "state_topic": "car/light/inside_kitchen/status",
+  "command_topic": "car/light/inside_kitchen/switch",
+  "brightness_state_topic": "car/light/inside_kitchen/brightness",
+  "brightness_command_topic": "car/light/inside_kitchen/brightness/set",
+  "brightness_scale": 100,
+  "on_command_type": "brightness",
+  "payload_off": "OFF",
+  "optimistic": false
+  "dev": { "identifiers": "l3", }
+}
+)END",
+    R"END(
+{
+  "name": "Outside Kitchen light",
+  "state_topic": "car/light/outside_kitchen/status",
+  "command_topic": "car/light/outside_kitchen/switch",
+  "brightness_state_topic": "car/light/outside_kitchen/brightness",
+  "brightness_command_topic": "car/light/outside_kitchen/brightness/set",
+  "brightness_scale": 100,
+  "on_command_type": "brightness",
+  "payload_off": "OFF",
+  "optimistic": false
+  "dev": { "identifiers": "l4", }
+}
+)END",
+};
 
 void onMqttConnect(bool sessionPresent) {
   Serial.println("Connected to MQTT.");
   Serial.print("Session present: ");
   Serial.println(sessionPresent);
+
+  // Device discovery. Pubilsh with retain since HASS requires that.
+  int i = 0;
+  for (const auto &hc : hassConfig) {
+    i += 1;
+    getMqttClient()->publish(
+        (String("homeassistant/light/l") + String(i) + String("/config")).c_str(), 2, true,
+        hc.c_str());
+  }
 
   mqttClient.subscribe("car/light/door/switch", 2);
   mqttClient.subscribe("car/light/door/brightness/set", 2);
@@ -115,13 +182,13 @@ void onMqttPublish(uint16_t packetId) {
 }
 
 void mqttClientStart(IPAddress ip, uint32_t port) {
-    mqttClient.onConnect(onMqttConnect);
-    mqttClient.onDisconnect(onMqttDisconnect);
-    mqttClient.onSubscribe(onMqttSubscribe);
-    mqttClient.onUnsubscribe(onMqttUnsubscribe);
-    mqttClient.onMessage(onMqttMessage);
-    mqttClient.onPublish(onMqttPublish);
-    mqttClient.setServer(ip, port);
+  mqttClient.onConnect(onMqttConnect);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  mqttClient.onMessage(onMqttMessage);
+  mqttClient.onPublish(onMqttPublish);
+  mqttClient.setServer(ip, port);
 }
 
 void connectToMqtt() {
