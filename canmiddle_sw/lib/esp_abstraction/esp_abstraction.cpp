@@ -1,4 +1,5 @@
 #include "esp_abstraction.h"
+#include "message.pb.h"
 
 #if defined(ARDUINO)
 

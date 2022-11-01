@@ -234,10 +234,6 @@ void setup() {
     digitalWrite(LED_BUILTIN, 0);
     passthrough = true;
     master_loop();
-  } else if (r == DEBUGGER) {
-    digitalWrite(LED_BUILTIN, 0);
-  } else if (r == MIRROR_ODD) {
-    digitalWrite(LED_BUILTIN, 0);
   } else {
     Serial.printf("role unknown: %d\n", r);
     while (1) {

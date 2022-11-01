@@ -9,13 +9,16 @@
 #include "esp_abstraction.h"
 
 using std::vector;
-extern std::set<uint32_t> filtered_props;
-extern SemaphoreHandle_t props_mu;
 
 struct Value {
   size_t size;
   uint8_t bytes[8];
 };
+
+// This function will be called for every change of a model's property.
+// It needs to be defined externally. There are two definitions. One in model_defs another
+// in tests.
+extern void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v);
 
 // Property value used to indicate that nothing is to be sent, only trigger a delay.
 constexpr uint32_t DELAY_ONLY_PROP = 0;

@@ -7,10 +7,14 @@
 #include "model.h"
 #include "Arduino.h"
 
-extern std::unique_ptr<Model<EspAbstraction>> car_model;
-extern std::unique_ptr<Model<EspAbstraction>> display_model;
-extern std::unique_ptr<Model<EspAbstraction>> car_ext_model;
-extern std::unique_ptr<Model<EspAbstraction>> display_ext_model;
+void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v);
+
+typedef Model<EspAbstraction> ConcreteModel;
+
+extern std::unique_ptr<ConcreteModel> car_model;
+extern std::unique_ptr<ConcreteModel> display_model;
+extern std::unique_ptr<ConcreteModel> car_ext_model;
+extern std::unique_ptr<ConcreteModel> display_ext_model;
 
 extern SemaphoreHandle_t props_mu;
 extern std::set<uint32_t> filtered_props;

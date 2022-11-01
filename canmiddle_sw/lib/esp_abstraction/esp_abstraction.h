@@ -61,7 +61,7 @@ struct MockEspAbstraction {
   MOCK_METHOD(void, Lock, (), ());
   MOCK_METHOD(void, Unlock, (), ());
   MOCK_METHOD(void, Enqueue, (const CanMessage& msg), ());
-  MOCK_METHOD(uint32_t, Millis, (), ());
+  MOCK_METHOD(int64_t, Micros, (), ());
 };
 #endif
 

@@ -9,10 +9,10 @@
 #include "model.h"
 #include "mqtt.h"
 
-std::unique_ptr<Model<EspAbstraction>> car_model{};
-std::unique_ptr<Model<EspAbstraction>> display_model{};
-std::unique_ptr<Model<EspAbstraction>> car_ext_model{};
-std::unique_ptr<Model<EspAbstraction>> display_ext_model{};
+std::unique_ptr<ConcreteModel> car_model;
+std::unique_ptr<ConcreteModel> display_model;
+std::unique_ptr<ConcreteModel> car_ext_model;
+std::unique_ptr<ConcreteModel> display_ext_model;
 
 SemaphoreHandle_t props_mu;
 std::set<uint32_t> filtered_props;

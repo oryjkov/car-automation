@@ -1,16 +1,20 @@
 #include <gtest/gtest.h>
 
-#include "esp_abstraction.h"
 #include "model.h"
+#include "esp_abstraction.h"
 
 using ::testing::_;
 using ::testing::Expectation;
 using ::testing::Field;
 using ::testing::AllOf;
 
+void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {}
+
+typedef Model<MockEspAbstraction> TestModel;
+
 TEST(ModelTest, SendState) {
   // clang-format off
-  Model<MockEspAbstraction> m = {.props = {
+  TestModel m = {.props = {
 	 {.prop = 0x052a, .send_delay_ms = 40, .val = {.size = 1, .bytes = { 0x3a, }}},
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
@@ -33,7 +37,7 @@ TEST(ModelTest, SendState) {
 // Tests that only a delay is triggered for the special property.
 TEST(ModelTest, SendStateDelay) {
   // clang-format off
-  Model<MockEspAbstraction> m = {.props = {
+  TestModel m = {.props = {
 	 {.prop = DELAY_ONLY_PROP, .send_delay_ms = 40, .val = {}},
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
@@ -51,7 +55,7 @@ TEST(ModelTest, SendStateDelay) {
 
 TEST(ModelTest, SendStateRepetitions) {
   // clang-format off
-  Model<MockEspAbstraction> m = {.props = {
+  TestModel m = {.props = {
 { .prop = 0x1b00002c, .send_delay_ms =  22, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
 { .prop = 0x1b00002d, .send_delay_ms =  40, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 2 },
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
@@ -97,7 +101,7 @@ TEST(ModelTest, SendStateRepetitions) {
 
 TEST(ModelTest, Update) {
   // clang-format off
-  Model<MockEspAbstraction> m = {.props = {
+  TestModel m = {.props = {
 	 {.prop = 0x052a, .send_delay_ms = 40, .val = {.size = 1, .bytes = { 0x3a, }}},
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
