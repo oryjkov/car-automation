@@ -1,0 +1,55 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# Example configuration.yaml entry
+mqtt:
+  light:
+    - name: "Door light"
+      state_topic: "car/light/door/status"
+      command_topic: "car/light/door/switch"
+      brightness_state_topic: 'car/light/door/brightness'
+      brightness_command_topic: 'car/light/door/brightness/set'
+      brightness_scale: 100
+      on_command_type: 'brightness'
+      payload_off: "OFF"
+      optimistic: false
+
+    - name: "Tailgate light"
+      state_topic: "car/light/tailgate/status"
+      command_topic: "car/light/tailgate/switch"
+      brightness_state_topic: 'car/light/tailgate/brightness'
+      brightness_command_topic: 'car/light/tailgate/brightness/set'
+      brightness_scale: 100
+      on_command_type: 'brightness'
+      payload_off: "OFF"
+      optimistic: false
+
+    - name: "Inside Kitchen light"
+      state_topic: "car/light/inside_kitchen/status"
+      command_topic: "car/light/inside_kitchen/switch"
+      brightness_state_topic: 'car/light/inside_kitchen/brightness'
+      brightness_command_topic: 'car/light/inside_kitchen/brightness/set'
+      brightness_scale: 100
+      on_command_type: 'brightness'
+      payload_off: "OFF"
+      optimistic: false
+
+    - name: "Outside Kitchen light"
+      state_topic: "car/light/outside_kitchen/status"
+      command_topic: "car/light/outside_kitchen/switch"
+      brightness_state_topic: 'car/light/outside_kitchen/brightness'
+      brightness_command_topic: 'car/light/outside_kitchen/brightness/set'
+      brightness_scale: 100
+      on_command_type: 'brightness'
+      payload_off: "OFF"
+      optimistic: false
+
