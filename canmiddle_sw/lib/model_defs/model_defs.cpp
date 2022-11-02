@@ -128,17 +128,6 @@ void PublishBrightness(const String &light, uint32_t brightness) {
                            b.length());
 }
 
-// Gets a bit from a byte array.
-bool getBit(uint8_t bit_num, const uint8_t *d) {
-  uint8_t byte_num = bit_num / 8;
-  bit_num = bit_num % 8;
-  // bit 0 is the most significant bit.
-  bit_num = 7 - bit_num;
-
-  return (d[byte_num] & (1 << bit_num)) != 0;
-}
-uint8_t getBrightnessByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num] & 0x7f; }
-
 // Structure containing the CAN properties for getting/setting lights.
 struct LightDescriptor {
   String light;            // String name - same as what's used in the mqtt topics.
@@ -195,6 +184,7 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
     return;
   }
 
+  // lights
   for (const auto &l : lmp) {
     if (prop == 0x528 && (getBit(l.state_bit, new_v) != getBit(l.state_bit, old_v))) {
       bool s = getBit(l.state_bit, new_v);
@@ -207,6 +197,25 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
     }
   }
 
+  // fridge
+  if (prop == 0x532) {
+    if (getBit(7, new_v) != getBit(7, old_v)) {
+      bool s = getBit(7, new_v);
+      String state = (s) ? "ON" : "OFF";
+      String topic = "car/fridge/state";
+      go([=]() {
+        getMqttClient()->publish(topic.c_str(), 2, true, state.c_str(), state.length());
+      });
+    }
+    if (getBits(2, 3, new_v) != getBits(2, 3, old_v)) {
+      uint32_t power_setting = getBits(2, 3, new_v);
+      String ps = String(power_setting);
+      String topic = "car/fridge/percentage_state";
+
+      go([=]() { getMqttClient()->publish(topic.c_str(), 2, true, ps.c_str(), ps.length()); });
+    }
+  }
+
   xSemaphoreTake(props_mu, portMAX_DELAY);
   if (filtered_props.count(prop) == 0) {
     Serial.printf("[%05d] 0x%04x: ", millis(), prop);
@@ -216,6 +225,23 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
     Serial.println();
   }
   xSemaphoreGive(props_mu);
+}
+
+void SetFridgePower(uint32_t power) {
+  if (power < 0 || power > 6) {
+    return;
+  }
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {7 << 1, 0x00, 0x00, 0x00};
+  uint8_t data[] = {static_cast<uint8_t>(power) << 1, 0x00, 0x00, 0x00};
+  display_model->UpdateMasked(0x531, 4, mask, data);
+}
+
+void SetFridgeState(bool on) {
+  display_model->DisableCanFor(600);
+  uint8_t mask[] = {1, 0x00, 0x00, 0x00};
+  uint8_t data[] = {static_cast<uint8_t>(on), 0x00, 0x00, 0x00};
+  display_model->UpdateMasked(0x531, 4, mask, data);
 }
 
 void LightsOff() {

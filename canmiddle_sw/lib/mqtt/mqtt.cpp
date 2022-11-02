@@ -16,6 +16,20 @@ AsyncMqttClient *getMqttClient() { return &mqttClient; }
 
 static String hassConfig[][2] = {
     {
+        "fan",
+        R"END(
+{
+  "name": "Fridge",
+  "command_topic": "car/fridge/command",
+  "state_topic": "car/fridge/state",
+  "percentage_state_topic": "car/fridge/percentage_state",
+  "percentage_command_topic": "car/fridge/percentage_command",
+  "speed_range_min": 1,
+  "speed_range_max": 6
+}
+)END",
+    },
+    {
         "button",
         R"END(
 {
@@ -130,6 +144,9 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("car/controller/can/stop", 2);
   mqttClient.subscribe("car/controller/can/start", 2);
 
+  mqttClient.subscribe("car/fridge/command", 2);
+  mqttClient.subscribe("car/fridge/percentage_command", 2);
+
   mqttClient.subscribe("car/light/door/switch", 2);
   mqttClient.subscribe("car/light/door/brightness/set", 2);
 
@@ -195,6 +212,12 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
       start_send_state();
   } else if (topic_str == "car/controller/stop") {
       stop_send_state();
+  } else if (topic_str == "car/fridge/command") {
+    bool s = (payload_str == "ON");
+    go([=]() { SetFridgeState(s); });
+  } else if (topic_str == "car/fridge/percentage_command") {
+    uint32_t p = payload_str.toInt();
+    go([=]() { SetFridgePower(p); });
   } else if (topic_str == "car/light/door/brightness/set") {
     int brightness = ParseBrightness(payload_str);
     go([=]() { SetLight("door", brightness, false); });

@@ -30,4 +30,7 @@ void DebugSet(M *m, uint32_t prop, const Value v) {
 void SetLight(const String &name, uint8_t i, bool off);
 void LightsOff();
 
+void SetFridgeState(bool on);
+void SetFridgePower(uint32_t power);
+
 #endif  // __MODEL_DEFS_H__

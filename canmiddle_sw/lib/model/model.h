@@ -15,6 +15,25 @@ struct Value {
   uint8_t bytes[8];
 };
 
+// Gets a bit from a byte array.
+inline bool getBit(uint8_t bit_num, const uint8_t *d) {
+  uint8_t byte_num = bit_num / 8;
+  bit_num = bit_num % 8;
+  // bit 0 is the most significant bit.
+  bit_num = 7 - bit_num;
+
+  return (d[byte_num] & (1 << bit_num)) != 0;
+}
+inline uint8_t getBrightnessByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num] & 0x7f; }
+inline uint32_t getBits(uint8_t bit_num, uint8_t bit_count, const uint8_t *d) {
+  uint32_t result = 0;
+  for (int i = 0; i < bit_count; i++) {
+    result = (result << 1) | getBit(bit_num + i, d);
+  }
+  return result;
+}
+
+
 // This function will be called for every change of a model's property.
 // It needs to be defined externally. There are two definitions. One in model_defs another
 // in tests.

@@ -1,16 +1,30 @@
 #include <gtest/gtest.h>
 
-#include "model.h"
 #include "esp_abstraction.h"
+#include "model.h"
 
 using ::testing::_;
+using ::testing::AllOf;
 using ::testing::Expectation;
 using ::testing::Field;
-using ::testing::AllOf;
 
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {}
 
 typedef Model<MockEspAbstraction> TestModel;
+
+TEST(ModelTest, GetBit) {
+  ASSERT_EQ(getBit(0, (uint8_t *)"\x80"), 1);
+  ASSERT_EQ(getBit(7, (uint8_t *)"\x01"), 1);
+  ASSERT_EQ(getBit(8, (uint8_t *)"\x00\x80"), 1);
+  ASSERT_EQ(getBit(15, (uint8_t *)"\x00\x01"), 1);
+  ASSERT_EQ(getBit(3, (uint8_t *)"\x10"), 1);
+  ASSERT_EQ(getBit(11, (uint8_t *)"\x00\x10"), 1);
+}
+
+TEST(ModelTest, GetBits) {
+  ASSERT_EQ(getBits(0, 1, (uint8_t *)"\x80"), 1);
+  ASSERT_EQ(getBits(2, 3, (uint8_t *)"\x31"), 6);
+}
 
 TEST(ModelTest, SendState) {
   // clang-format off
@@ -22,14 +36,10 @@ TEST(ModelTest, SendState) {
   MockEspAbstraction &esp = m.esp;
   EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
   EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x052a)
-    )));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x053a)
-    )));
+  EXPECT_CALL(esp,
+              Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x052a))));
+  EXPECT_CALL(esp,
+              Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x053a))));
 
   EXPECT_TRUE(m.SendState(1));
 }
@@ -45,10 +55,8 @@ TEST(ModelTest, SendStateDelay) {
   MockEspAbstraction &esp = m.esp;
   EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
   EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x053a)
-    )));
+  EXPECT_CALL(esp,
+              Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x053a))));
 
   EXPECT_TRUE(m.SendState(1));
 }
@@ -63,39 +71,31 @@ TEST(ModelTest, SendStateRepetitions) {
   // clang-format on
   MockEspAbstraction &esp = m.esp;
   EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x1b00002c),
-    Field(&CanMessage::has_extended, true),
-    Field(&CanMessage::extended, true)
-    )));
+  EXPECT_CALL(
+      esp,
+      Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
+                    Field(&CanMessage::has_extended, true), Field(&CanMessage::extended, true))));
   EXPECT_TRUE(m.SendState(1));
 
   EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x1b00002d),
-    Field(&CanMessage::has_extended, true),
-    Field(&CanMessage::extended, true)
-    )));
+  EXPECT_CALL(
+      esp,
+      Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002d),
+                    Field(&CanMessage::has_extended, true), Field(&CanMessage::extended, true))));
   EXPECT_TRUE(m.SendState(2));
 
   EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x1b00002c),
-    Field(&CanMessage::has_extended, true),
-    Field(&CanMessage::has_prop, true)
-    )));
+  EXPECT_CALL(
+      esp,
+      Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
+                    Field(&CanMessage::has_extended, true), Field(&CanMessage::has_prop, true))));
   EXPECT_TRUE(m.SendState(3));
 
   EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
-  EXPECT_CALL(esp, Enqueue(AllOf(
-    Field(&CanMessage::has_prop, true),
-    Field(&CanMessage::prop, 0x1b00002c),
-    Field(&CanMessage::has_extended, true),
-    Field(&CanMessage::has_prop, true)
-    )));
+  EXPECT_CALL(
+      esp,
+      Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
+                    Field(&CanMessage::has_extended, true), Field(&CanMessage::has_prop, true))));
   EXPECT_TRUE(m.SendState(4));
 }
 
