@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <set>
 
@@ -140,42 +141,52 @@ struct LightDescriptor {
   size_t
       set_brightness_byte;  // Byte number for brightness. Only 7 lowest bits of that byte are used.
 };
-LightDescriptor lmp[] = {
+std::map<LightsEnum, LightDescriptor> lmp = {
+    {OUTSIDE_KITCHEN,
+     {
+         .light = "outside_kitchen",
+         .state_bit = 0,
+         .brightness_prop = 0x528,
+         .brightness_byte = 1,
+         .selector = 7,
+         .set_brightness_prop = 0x526,
+         .set_brightness_byte = 2,
+     }},
     {
-        .light = "outside_kitchen",
-        .state_bit = 0,
-        .brightness_prop = 0x528,
-        .brightness_byte = 1,
-        .selector = 7,
-        .set_brightness_prop = 0x526,
-        .set_brightness_byte = 2,
+        INSIDE_KITCHEN,
+        {
+            .light = "inside_kitchen",
+            .state_bit = 5,
+            .brightness_prop = 0x527,
+            .brightness_byte = 1,
+            .selector = 2,
+            .set_brightness_prop = 0x525,
+            .set_brightness_byte = 1,
+        },
     },
     {
-        .light = "inside_kitchen",
-        .state_bit = 5,
-        .brightness_prop = 0x527,
-        .brightness_byte = 1,
-        .selector = 2,
-        .set_brightness_prop = 0x525,
-        .set_brightness_byte = 1,
+        DOOR,
+        {
+            .light = "door",
+            .state_bit = 8,
+            .brightness_prop = 0x528,
+            .brightness_byte = 2,
+            .selector = 8,
+            .set_brightness_prop = 0x526,
+            .set_brightness_byte = 3,
+        },
     },
     {
-        .light = "door",
-        .state_bit = 8,
-        .brightness_prop = 0x528,
-        .brightness_byte = 2,
-        .selector = 8,
-        .set_brightness_prop = 0x526,
-        .set_brightness_byte = 3,
-    },
-    {
-        .light = "tailgate",
-        .state_bit = 1,
-        .brightness_prop = 0x527,
-        .brightness_byte = 5,
-        .selector = 6,
-        .set_brightness_prop = 0x526,
-        .set_brightness_byte = 0,
+        TAILGATE,
+        {
+            .light = "tailgate",
+            .state_bit = 1,
+            .brightness_prop = 0x527,
+            .brightness_byte = 5,
+            .selector = 6,
+            .set_brightness_prop = 0x526,
+            .set_brightness_byte = 0,
+        },
     },
 };
 
@@ -185,7 +196,8 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
   }
 
   // lights
-  for (const auto &l : lmp) {
+  for (const auto iter : lmp) {
+    const LightDescriptor &l = iter.second;
     if (prop == 0x528 && (getBit(l.state_bit, new_v) != getBit(l.state_bit, old_v))) {
       bool s = getBit(l.state_bit, new_v);
       go([=]() { PublishOnOff(l.light, s); });
@@ -265,21 +277,14 @@ void LightsOff() {
   display_model->Update(0x525, {.size = 5, .bytes = {0x8c, 0x46, 0x46, 0x1e, 0x1e}});
 }
 
-void SetLight(const String &name, uint8_t brightness, bool off) {
-  bool found = false;
-  LightDescriptor &l = lmp[0];
-  for (const auto &_l : lmp) {
-    if (_l.light == name) {
-      found = true;
-      l = _l;
-    }
-  }
-  if (!found) {
-    Serial.print("light not found: ");
-    Serial.println(name);
+void SetLight(LightsEnum light, uint8_t brightness, bool off) {
+  auto search = lmp.find(light);
+
+  if (search == lmp.end()) {
     return;
   }
   display_model->DisableCanFor(600);
+  const LightDescriptor &l = search->second;
 
   // Set Selector.
   uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};

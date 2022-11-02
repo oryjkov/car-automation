@@ -219,37 +219,37 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
       stop_send_state();
   } else if (topic_str == "car/fridge/command") {
     bool s = (payload_str == "ON");
-    go([=]() { SetFridgeState(s); });
+    SetFridgeState(s);
   } else if (topic_str == "car/fridge/percentage_command") {
     uint32_t p = payload_str.toInt();
-    go([=]() { SetFridgePower(p); });
+    SetFridgePower(p);
   } else if (topic_str == "car/light/door/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { SetLight("door", brightness, false); });
+    SetLight(DOOR, brightness, false);
   } else if (topic_str == "car/light/door/switch") {
     if (payload_str == "OFF") {
-      go([=]() { SetLight("door", 70, true); });
+      SetLight(DOOR, 70, true);
     }
   } else if (topic_str == "car/light/outside_kitchen/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { SetLight("outside_kitchen", brightness, false); });
+    SetLight(OUTSIDE_KITCHEN, brightness, false);
   } else if (topic_str == "car/light/outside_kitchen/switch") {
     if (payload_str == "OFF") {
-      go([=]() { SetLight("outside_kitchen", 70, true); });
+      SetLight(OUTSIDE_KITCHEN, 70, true);
     }
   } else if (topic_str == "car/light/tailgate/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { SetLight("tailgate", brightness, false); });
+    SetLight(TAILGATE, brightness, false);
   } else if (topic_str == "car/light/tailgate/switch") {
     if (payload_str == "OFF") {
-      go([=]() { SetLight("tailgate", 70, true); });
+      SetLight(TAILGATE, 70, true);
     }
   } else if (topic_str == "car/light/inside_kitchen/brightness/set") {
     int brightness = ParseBrightness(payload_str);
-    go([=]() { SetLight("inside_kitchen", brightness, false); });
+    SetLight(INSIDE_KITCHEN, brightness, false);
   } else if (topic_str == "car/light/inside_kitchen/switch") {
     if (payload_str == "OFF") {
-      go([=]() { SetLight("inside_kitchen", 70, true); });
+      SetLight(INSIDE_KITCHEN, 70, true);
     }
   } else {
   }

@@ -27,7 +27,13 @@ void DebugSet(M *m, uint32_t prop, const Value v) {
   m->Update(prop, v);
 }
 
-void SetLight(const String &name, uint8_t i, bool off);
+enum LightsEnum {
+  OUTSIDE_KITCHEN = 1,
+  INSIDE_KITCHEN = 2,
+  DOOR = 3,
+  TAILGATE = 4,
+};
+void SetLight(LightsEnum light, uint8_t brightness, bool off);
 void LightsOff();
 
 void SetFridgeState(bool on);
