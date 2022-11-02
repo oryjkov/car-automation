@@ -23,7 +23,7 @@ uint8_t hexbyte(const char *hex) { return (hexdigit(*hex) << 4) | hexdigit(*(hex
 
 AsyncWebServer server(80);
 
-#define MQTT_HOST IPAddress(192, 168, 158, 147)
+#define MQTT_HOST IPAddress(192, 168, 50, 15)
 #define MQTT_PORT 1883
 
 const char *ssid = SECRET_WIFI_SSID;

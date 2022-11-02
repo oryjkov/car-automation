@@ -14,8 +14,37 @@ TimerHandle_t mqttReconnectTimer;
 
 AsyncMqttClient *getMqttClient() { return &mqttClient; }
 
-static String hassConfig[] = {
-    R"END(
+static String hassConfig[][2] = {
+    {
+        "button",
+        R"END(
+{
+  "name": "Restart CAN controller",
+  "command_topic": "car/controller/restart"
+}
+)END",
+    },
+    {
+        "button",
+        R"END(
+{
+  "name": "Start CAN comms",
+  "command_topic": "car/controller/can/start"
+}
+)END",
+    },
+    {
+        "button",
+        R"END(
+{
+  "name": "Stop CAN comms",
+  "command_topic": "car/controller/can/stop"
+}
+)END",
+    },
+    {
+        "light",
+        R"END(
 {
   "name": "Door light",
   "state_topic": "car/light/door/status",
@@ -25,11 +54,14 @@ static String hassConfig[] = {
   "brightness_scale": 100,
   "on_command_type": "brightness",
   "payload_off": "OFF",
-  "optimistic": false
-  "dev": { "identifiers": "l1", }
+  "optimistic": false,
+  "dev": { "identifiers": "l1" }
 }
 )END",
-    R"END(
+    },
+    {
+        "light",
+        R"END(
 {
   "name": "Tailgate light",
   "state_topic": "car/light/tailgate/status",
@@ -39,11 +71,14 @@ static String hassConfig[] = {
   "brightness_scale": 100,
   "on_command_type": "brightness",
   "payload_off": "OFF",
-  "optimistic": false
-  "dev": { "identifiers": "l2", }
+  "optimistic": false,
+  "dev": { "identifiers": "l2" }
 }
 )END",
-    R"END(
+    },
+    {
+        "light",
+        R"END(
 {
   "name": "Inside Kitchen light",
   "state_topic": "car/light/inside_kitchen/status",
@@ -53,11 +88,14 @@ static String hassConfig[] = {
   "brightness_scale": 100,
   "on_command_type": "brightness",
   "payload_off": "OFF",
-  "optimistic": false
-  "dev": { "identifiers": "l3", }
+  "optimistic": false,
+  "dev": { "identifiers": "l3" }
 }
 )END",
-    R"END(
+    },
+    {
+        "light",
+        R"END(
 {
   "name": "Outside Kitchen light",
   "state_topic": "car/light/outside_kitchen/status",
@@ -67,10 +105,11 @@ static String hassConfig[] = {
   "brightness_scale": 100,
   "on_command_type": "brightness",
   "payload_off": "OFF",
-  "optimistic": false
-  "dev": { "identifiers": "l4", }
+  "optimistic": false,
+  "dev": { "identifiers": "l4" }
 }
 )END",
+    },
 };
 
 void onMqttConnect(bool sessionPresent) {
@@ -83,9 +122,13 @@ void onMqttConnect(bool sessionPresent) {
   for (const auto &hc : hassConfig) {
     i += 1;
     getMqttClient()->publish(
-        (String("homeassistant/light/l") + String(i) + String("/config")).c_str(), 2, true,
-        hc.c_str());
+        (String("homeassistant/" + hc[0] + "/l") + String(i) + String("/config")).c_str(), 2, true,
+        hc[1].c_str());
   }
+
+  mqttClient.subscribe("car/controller/restart", 2);
+  mqttClient.subscribe("car/controller/can/stop", 2);
+  mqttClient.subscribe("car/controller/can/start", 2);
 
   mqttClient.subscribe("car/light/door/switch", 2);
   mqttClient.subscribe("car/light/door/brightness/set", 2);
@@ -133,6 +176,9 @@ int ParseBrightness(const String &payload) {
   return b;
 }
 
+extern void start_send_state();
+extern void stop_send_state();
+
 void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties,
                    size_t payload_len, size_t index, size_t total) {
   String payload_str = String(payload, payload_len);
@@ -143,7 +189,13 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
   Serial.print(payload_str);
   Serial.println("'");
 
-  if (topic_str == "car/light/door/brightness/set") {
+  if (topic_str == "car/controller/restart") {
+    abort();
+  } else if (topic_str == "car/controller/start") {
+      start_send_state();
+  } else if (topic_str == "car/controller/stop") {
+      stop_send_state();
+  } else if (topic_str == "car/light/door/brightness/set") {
     int brightness = ParseBrightness(payload_str);
     go([=]() { SetLight("door", brightness, false); });
   } else if (topic_str == "car/light/door/switch") {
