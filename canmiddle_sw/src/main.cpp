@@ -3,6 +3,7 @@
 #include <AsyncMqttClient.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncElegantOTA.h>
 #include <Preferences.h>
 #include <Ticker.h>
 #include <WiFi.h>
@@ -23,6 +24,7 @@ uint8_t hexbyte(const char *hex) { return (hexdigit(*hex) << 4) | hexdigit(*(hex
 
 AsyncWebServer server(80);
 
+//#define MQTT_HOST IPAddress(192, 168, 235, 5)
 #define MQTT_HOST IPAddress(192, 168, 50, 15)
 #define MQTT_PORT 1883
 
@@ -45,6 +47,7 @@ void WiFiEvent(WiFiEvent_t event) {
       Serial.println("IP address: ");
       Serial.println(WiFi.localIP());
       connectToMqtt();
+      AsyncElegantOTA.begin(&server);
       server.begin();
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
