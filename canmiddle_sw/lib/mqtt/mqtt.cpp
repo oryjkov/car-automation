@@ -20,6 +20,7 @@ static String hassConfig[][2] = {
         R"END(
 {
   "name": "Fridge",
+  "unique_id": "fridge",
   "command_topic": "car/fridge/command",
   "state_topic": "car/fridge/state",
   "percentage_state_topic": "car/fridge/percentage_state",
@@ -61,6 +62,7 @@ static String hassConfig[][2] = {
         R"END(
 {
   "name": "Door light",
+  "unique_id": "door_light",
   "state_topic": "car/light/door/status",
   "command_topic": "car/light/door/switch",
   "brightness_state_topic": "car/light/door/brightness",
@@ -78,6 +80,7 @@ static String hassConfig[][2] = {
         R"END(
 {
   "name": "Tailgate light",
+  "unique_id": "tailgate_light",
   "state_topic": "car/light/tailgate/status",
   "command_topic": "car/light/tailgate/switch",
   "brightness_state_topic": "car/light/tailgate/brightness",
@@ -95,6 +98,7 @@ static String hassConfig[][2] = {
         R"END(
 {
   "name": "Inside Kitchen light",
+  "unique_id": "ik_light",
   "state_topic": "car/light/inside_kitchen/status",
   "command_topic": "car/light/inside_kitchen/switch",
   "brightness_state_topic": "car/light/inside_kitchen/brightness",
@@ -112,6 +116,7 @@ static String hassConfig[][2] = {
         R"END(
 {
   "name": "Outside Kitchen light",
+  "unique_id": "ok_light",
   "state_topic": "car/light/outside_kitchen/status",
   "command_topic": "car/light/outside_kitchen/switch",
   "brightness_state_topic": "car/light/outside_kitchen/brightness",
@@ -208,9 +213,9 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
 
   if (topic_str == "car/controller/restart") {
     abort();
-  } else if (topic_str == "car/controller/start") {
+  } else if (topic_str == "car/controller/can/start") {
       start_send_state();
-  } else if (topic_str == "car/controller/stop") {
+  } else if (topic_str == "car/controller/can/stop") {
       stop_send_state();
   } else if (topic_str == "car/fridge/command") {
     bool s = (payload_str == "ON");

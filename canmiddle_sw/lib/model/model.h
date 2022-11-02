@@ -24,6 +24,7 @@ inline bool getBit(uint8_t bit_num, const uint8_t *d) {
 
   return (d[byte_num] & (1 << bit_num)) != 0;
 }
+inline uint8_t getByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num]; }
 inline uint8_t getBrightnessByte(uint8_t byte_num, const uint8_t *d) { return d[byte_num] & 0x7f; }
 inline uint32_t getBits(uint8_t bit_num, uint8_t bit_count, const uint8_t *d) {
   uint32_t result = 0;

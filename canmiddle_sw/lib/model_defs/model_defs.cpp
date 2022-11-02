@@ -196,6 +196,15 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
       go([=]() { PublishBrightness(l.light, b); });
     }
   }
+  // Check for the physical light button press which sets the selector to 0.
+  if (prop == 0x528 && (getByte(3, new_v) != getByte(3, old_v))) {
+    if (getByte(3, new_v) == 0) {
+      display_model->DisableCanFor(600);
+      uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
+      uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
+      display_model->UpdateMasked(0x526, 4, mask, data);
+    }
+  }
 
   // fridge
   if (prop == 0x532) {
@@ -233,7 +242,7 @@ void SetFridgePower(uint32_t power) {
   }
   display_model->DisableCanFor(600);
   uint8_t mask[] = {7 << 1, 0x00, 0x00, 0x00};
-  uint8_t data[] = {static_cast<uint8_t>(power) << 1, 0x00, 0x00, 0x00};
+  uint8_t data[] = {static_cast<uint8_t>(power << 1), 0x00, 0x00, 0x00};
   display_model->UpdateMasked(0x531, 4, mask, data);
 }
 
@@ -256,7 +265,7 @@ void LightsOff() {
   display_model->Update(0x525, {.size = 5, .bytes = {0x8c, 0x46, 0x46, 0x1e, 0x1e}});
 }
 
-void SetLight(const String &name, uint8_t i, bool off) {
+void SetLight(const String &name, uint8_t brightness, bool off) {
   bool found = false;
   LightDescriptor &l = lmp[0];
   for (const auto &_l : lmp) {
@@ -266,6 +275,8 @@ void SetLight(const String &name, uint8_t i, bool off) {
     }
   }
   if (!found) {
+    Serial.print("light not found: ");
+    Serial.println(name);
     return;
   }
   display_model->DisableCanFor(600);
@@ -275,13 +286,13 @@ void SetLight(const String &name, uint8_t i, bool off) {
   uint8_t data[] = {0x00, l.selector, 0x00, 0x00};
   display_model->UpdateMasked(0x526, 4, mask, data);
 
-  // Set Intensity. Mask and data have lenght of 5, as this is the max (prop 0x525).
+  // Set brightness. Mask and data have lenght of 5, as this is the max (prop 0x525).
   uint8_t mask2[] = {0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t data2[] = {0x00, 0x00, 0x00, 0x00, 0x00};
   mask2[l.set_brightness_byte] = 0x7f;
-  data2[l.set_brightness_byte] = i;
+  data2[l.set_brightness_byte] = brightness;
   // Pass in the lenght of 5, even though if l.brightness_prop==0x526, it is 4.
-  display_model->UpdateMasked(l.brightness_prop, 5, mask2, data2);
+  display_model->UpdateMasked(l.set_brightness_prop, 5, mask2, data2);
 
   if (off) {
     // OFF is always the same, but we have to let the selector we just set propagate.
