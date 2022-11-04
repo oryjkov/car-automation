@@ -6,6 +6,7 @@
 
 #include "Arduino.h"
 #include "esp_abstraction.h"
+#include "io_abstraction.h"
 #include "go.h"
 #include "model.h"
 #include "mqtt.h"
@@ -18,7 +19,7 @@ std::unique_ptr<ConcreteModel> display_ext_model;
 SemaphoreHandle_t props_mu;
 std::set<uint32_t> filtered_props;
 
-void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
+void InitModels(IOAbstraction *io) {
   car_model =
       std::unique_ptr<Model<EspAbstraction>>(
           new Model<EspAbstraction>(
@@ -48,7 +49,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  40, },
                           // clang-format on
                       },
-                  .esp = EspAbstraction(uart_q),
+                  .esp = EspAbstraction(io->twai_tx_queue),
                   .can_enable_at_us = 0,
               }));
 
@@ -59,7 +60,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
               // clang-format on
       },
-      .esp = EspAbstraction(uart_q),
+      .esp = EspAbstraction(io->twai_tx_queue),
       .can_enable_at_us = 0,
   }));
 
@@ -83,7 +84,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  99, },
               // clang-format on
           },
-      .esp = EspAbstraction(twai_q),
+      .esp = EspAbstraction(io->twai_tx_queue),
       .can_enable_at_us = 0,
   }));
 
@@ -103,7 +104,7 @@ void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q) {
 { .prop = 0x1b000046, .send_delay_ms = 100, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } } },
           },
               // clang-format on
-      .esp = EspAbstraction(twai_q),
+      .esp = EspAbstraction(io->twai_tx_queue),
       .can_enable_at_us = 0,
   }));
 

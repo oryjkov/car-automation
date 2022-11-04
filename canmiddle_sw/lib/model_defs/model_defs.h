@@ -6,6 +6,7 @@
 
 #include "model.h"
 #include "Arduino.h"
+#include "io_abstraction.h"
 
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v);
 
@@ -19,7 +20,7 @@ extern std::unique_ptr<ConcreteModel> display_ext_model;
 extern SemaphoreHandle_t props_mu;
 extern std::set<uint32_t> filtered_props;
 
-void InitModels(QueueHandle_t twai_q, QueueHandle_t uart_q);
+void InitModels(IOAbstraction *io);
 
 template <typename M>
 void DebugSet(M *m, uint32_t prop, const Value v) {
