@@ -10,14 +10,14 @@
 #include "go.h"
 #include "model.h"
 #include "mqtt.h"
+#include "props_logger.h"
 
 std::unique_ptr<ConcreteModel> car_model;
 std::unique_ptr<ConcreteModel> display_model;
 std::unique_ptr<ConcreteModel> car_ext_model;
 std::unique_ptr<ConcreteModel> display_ext_model;
 
-SemaphoreHandle_t props_mu;
-std::set<uint32_t> filtered_props;
+PropsLogger props_logger;
 
 void InitModels(IOAbstraction *io) {
   car_model =
@@ -108,14 +108,7 @@ void InitModels(IOAbstraction *io) {
       .can_enable_at_us = 0,
   }));
 
-  props_mu = xSemaphoreCreateMutex();
-  if (props_mu == nullptr) {
-    abort();
-  }
-  filtered_props = {
-      0x53a,
-  };
-  // selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
+  props_logger = PropsLogger();
 }
 
 void PublishOnOff(const String &light, bool state) {
@@ -238,15 +231,7 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
     }
   }
 
-  xSemaphoreTake(props_mu, portMAX_DELAY);
-  if (filtered_props.count(prop) == 0) {
-    Serial.printf("[%05d] 0x%04x: ", millis(), prop);
-    for (int i = 0; i < len; i++) {
-      Serial.printf("0x%02x ", new_v[i]);
-    }
-    Serial.println();
-  }
-  xSemaphoreGive(props_mu);
+  props_logger.log(prop, len, new_v);
 }
 
 void SetFridgePower(uint32_t power) {

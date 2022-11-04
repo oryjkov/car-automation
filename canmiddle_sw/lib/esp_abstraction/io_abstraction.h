@@ -11,6 +11,7 @@ struct IOAbstraction {
   // Callback for receiving messages.
   typedef void cb(QueueElement *);
 
+  // Callback must free() its argument when done.
   IOAbstraction(cb *f);
 
   // Puts message on the UART tx queue.

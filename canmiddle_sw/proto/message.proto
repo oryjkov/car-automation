@@ -21,6 +21,7 @@ message Response {
 
 message Metadata {
     enum Source {
+        UNKNOWN = 0;
         MASTER = 1;  // RX on CAN
         SLAVE = 2;   // RX on UART (slave)
         MASTER_TX = 3;  // TX CAN (i.e. CAN Transmit from master).

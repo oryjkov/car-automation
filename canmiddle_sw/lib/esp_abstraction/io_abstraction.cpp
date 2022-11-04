@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "util.h"
+#include "snoop_buffer.h"
 #include "freertos/task.h"
 
 constexpr gpio_num_t TX_GPIO_NUM = GPIO_NUM_25;
@@ -28,8 +29,8 @@ static void twai_tx_task(void *arg) {
       continue;
     }
 
-    if (get_snoop_buffer()->IsActive()) {
-      get_snoop_buffer()->Snoop({.message = e->msg,
+    if (snoop_buffer.IsActive()) {
+      snoop_buffer.Snoop({.message = e->msg,
                                  .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
                                               .source = Metadata_Source_MASTER_TX}});
     }
@@ -59,8 +60,8 @@ static void uart_tx_task(void *arg) {
       continue;
     }
 
-    if (get_snoop_buffer()->IsActive()) {
-      get_snoop_buffer()->Snoop({.message = e->msg,
+    if (snoop_buffer.IsActive()) {
+      snoop_buffer.Snoop({.message = e->msg,
                                  .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
                                               .source = Metadata_Source_SLAVE_TX}});
     }
@@ -100,8 +101,8 @@ static void twai_receive_task(void *arg) {
         .event_us = esp_timer_get_time(),
     };
     memcpy(e->msg.value.bytes, rx_message.data, rx_message.data_length_code);
-    if (get_snoop_buffer()->IsActive()) {
-      get_snoop_buffer()->Snoop({.message = e->msg,
+    if (snoop_buffer.IsActive()) {
+      snoop_buffer.Snoop({.message = e->msg,
                                  .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
                                               .source = Metadata_Source_MASTER}});
     }
@@ -133,8 +134,8 @@ static void uart_receive_task(void *arg) {
     e->event_us = esp_timer_get_time();
     ESP_LOGI(EXAMPLE_TAG, "Received msg on uart, prop: %d", e->msg.prop);
 
-    if (get_snoop_buffer()->IsActive()) {
-      get_snoop_buffer()->Snoop({.message = e->msg,
+    if (snoop_buffer.IsActive()) {
+      snoop_buffer.Snoop({.message = e->msg,
                                  .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
                                               .source = Metadata_Source_SLAVE}});
     }

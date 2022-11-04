@@ -6,27 +6,9 @@
 #include <pb_encode.h>
 
 #include "message.pb.h"
+#include "snoop_buffer.h"
 
 #define EXAMPLE_TAG "TWAI Self Test"
-
-struct SnoopBuffer {
-  void Init();
-  bool IsActive();
-  bool Snoop(const SnoopData &s);
-  void Activate(int32_t for_ms);
-  int32_t TimeRemainingMs();
-
-  uint8_t *buffer;
-  size_t position = 0;
-
- private:
-  uint32_t end_ms = 0;
-
-  xSemaphoreHandle mu = nullptr;
-};
-SnoopBuffer *get_snoop_buffer();
-constexpr size_t snoop_buffer_max_size = 50 * (1 << 10);
-bool add_to_snoop_buffer(const SnoopData &s);
 
 bool recv_over_uart(CanMessage *msg);
 bool send_over_uart(const CanMessage &msg);

@@ -11,6 +11,7 @@
 
 /* Enum definitions */
 typedef enum _Metadata_Source { 
+    Metadata_Source_UNKNOWN = 0, 
     Metadata_Source_MASTER = 1, 
     Metadata_Source_SLAVE = 2, 
     Metadata_Source_MASTER_TX = 3, 
@@ -56,7 +57,7 @@ typedef struct _SnoopData {
 
 
 /* Helper constants for enums */
-#define _Metadata_Source_MIN Metadata_Source_MASTER
+#define _Metadata_Source_MIN Metadata_Source_UNKNOWN
 #define _Metadata_Source_MAX Metadata_Source_SLAVE_TX
 #define _Metadata_Source_ARRAYSIZE ((Metadata_Source)(Metadata_Source_SLAVE_TX+1))
 
@@ -118,7 +119,7 @@ X(a, STATIC,   OPTIONAL, UINT32,   drops,             3)
 X(a, STATIC,   REQUIRED, UINT64,   recv_us,           1) \
 X(a, STATIC,   REQUIRED, UENUM,    source,            2)
 #define Metadata_CALLBACK NULL
-#define Metadata_DEFAULT (const pb_byte_t*)"\x10\x01\x00"
+#define Metadata_DEFAULT NULL
 
 #define SnoopData_FIELDLIST(X, a) \
 X(a, STATIC,   REQUIRED, MESSAGE,  message,           1) \

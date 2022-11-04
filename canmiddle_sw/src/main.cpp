@@ -1,9 +1,9 @@
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include <Arduino.h>
+#include <AsyncElegantOTA.h>
 #include <AsyncMqttClient.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <AsyncElegantOTA.h>
 #include <Preferences.h>
 #include <Ticker.h>
 #include <WiFi.h>
@@ -15,9 +15,10 @@
 #include "go.h"
 #include "message.pb.h"
 #include "model_defs.h"
-#include "secrets.h"
-#include "util.h"
 #include "mqtt.h"
+#include "secrets.h"
+#include "snoop_buffer.h"
+#include "util.h"
 
 uint8_t hexdigit(char hex) { return (hex <= '9') ? hex - '0' : toupper(hex) - 'A' + 10; }
 uint8_t hexbyte(const char *hex) { return (hexdigit(*hex) << 4) | hexdigit(*(hex + 1)); }
@@ -136,7 +137,6 @@ void setup() {
 
     mqttClientStart(MQTT_HOST, MQTT_PORT);
     connectToWifi();
-    get_snoop_buffer()->Init();
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       AsyncResponseStream *response = request->beginResponseStream("text/plain");
@@ -150,9 +150,7 @@ void setup() {
       }
       uint32_t key;
       sscanf(request->getParam("k")->value().c_str(), "%x", &key);
-      xSemaphoreTake(props_mu, portMAX_DELAY);
-      filtered_props.insert(key);
-      xSemaphoreGive(props_mu);
+      props_logger.filter(key);
       request->send(500, "text/plain", "ok\r\n");
     });
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -197,20 +195,21 @@ void setup() {
       request->send(200, "text/plain", "Stopped");
     });
     server.on("/get_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
-      if (get_snoop_buffer()->IsActive()) {
+      if (snoop_buffer.IsActive()) {
         request->send(400, "text/plain", "snoop is still active");
       } else {
-        AsyncWebServerResponse *response =
-            request->beginResponse_P(200, "application/octet-stream", get_snoop_buffer()->buffer,
-                                     get_snoop_buffer()->position);
+        snoop_buffer.Lock();
+        AsyncWebServerResponse *response = request->beginResponse_P(
+            200, "application/octet-stream", snoop_buffer.buffer, snoop_buffer.position);
+        snoop_buffer.Unlock();
         request->send(response);
       }
     });
     server.on("/start_snoop", HTTP_GET, [](AsyncWebServerRequest *request) {
       AsyncResponseStream *response = request->beginResponseStream("text/plain");
-      if (get_snoop_buffer()->IsActive()) {
+      if (snoop_buffer.IsActive()) {
         response->printf("already running for another %d ms, snooped %d bytes\r\n",
-                         get_snoop_buffer()->TimeRemainingMs(), get_snoop_buffer()->position);
+                         snoop_buffer.TimeRemainingMs(), snoop_buffer.position);
       } else {
         uint32_t duration_ms = 1000;
         if (request->hasParam("duration_ms")) {
@@ -220,8 +219,8 @@ void setup() {
             duration_ms = d;
           }
         }
-        get_snoop_buffer()->Activate(duration_ms);
-        get_snoop_buffer()->position = 0;
+        snoop_buffer.Activate(duration_ms);
+        snoop_buffer.position = 0;
         response->printf("Snoop started. will run for %d buffer available: %d", duration_ms,
                          snoop_buffer_max_size);
       }

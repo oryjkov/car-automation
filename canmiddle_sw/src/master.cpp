@@ -96,8 +96,7 @@ void QueueRecvCallback(QueueElement *e) {
 void master_loop() {
   SemaphoreHandle_t done_sem = xSemaphoreCreateBinary();
 
-  IOAbstraction ioa(QueueRecvCallback);
-  io = &ioa;
+  io = new IOAbstraction(QueueRecvCallback);
   InitModels(io);
 
   control_q = xQueueCreate(1, sizeof(Command));
