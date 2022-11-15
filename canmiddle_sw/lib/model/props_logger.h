@@ -12,10 +12,8 @@
 template <typename LockAbstraction>
 struct PropsLogger {
   PropsLogger() : buf(10 * (1 << 10)) {
-    filtered_props = {
-        0x53a,  // Ignore this timer property to reduce noise.
-    };
-    // selected_props = {0x525, 0x526, 0x527, 0x527, 0x528, };
+    // Log indefinitely.
+    buf.Activate(-1);
   }
 
   // Adds given property to the filter.
@@ -25,11 +23,14 @@ struct PropsLogger {
   }
 
   // Logs the change.
-  void log(uint32_t prop, size_t len, const uint8_t *new_v) {
+  bool log(uint32_t prop, size_t len, const uint8_t *new_v) {
+    if (len>8) {
+      return false;
+    }
     {
       LockGuard<LockAbstraction> l(lock_abs);
       if (filtered_props.count(prop) > 0) {
-        return;
+        return false;
       }
     }
 
@@ -43,12 +44,12 @@ struct PropsLogger {
                         }},
         .metadata =
             {
-                .recv_us = micros(),
+                .recv_us = static_cast<uint64_t>(lock_abs.Micros()),
                 .source = Metadata_Source_UNKNOWN,
             },
     };
     memcpy(d.message.value.bytes, new_v, len);
-    buf.Snoop(d);
+    return buf.Snoop(d);
 
     /*
         Serial.printf("[%05d] 0x%04x: ", millis(), prop);

@@ -118,6 +118,7 @@ void InitModels(IOAbstraction *io) {
                   .queue_abs = QueueAbstraction(io->twai_tx_queue),
                   .can_enable_at_us = 0,
               }));
+  props_logger.filter(0x53a); // Ignore this timer property to reduce noise.
 }
 
 void PublishOnOff(const String &light, bool state) {

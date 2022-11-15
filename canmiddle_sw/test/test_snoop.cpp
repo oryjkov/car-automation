@@ -25,6 +25,19 @@ TEST(SnoopTest, TestActivateDeactivate) {
   ASSERT_FALSE(buf.IsActive());
 }
 
+TEST(SnoopTest, TestForeverActive) {
+  TestBuf buf(100);
+  auto &la = buf.lock_abs;
+  EXPECT_CALL(la, Millis()).WillRepeatedly(Return(0));
+  ASSERT_FALSE(buf.IsActive());
+  buf.Activate(-1);
+
+  ASSERT_TRUE(buf.IsActive());
+  ASSERT_EQ(buf.TimeRemainingMs(), -1);
+  EXPECT_CALL(la, Millis()).WillRepeatedly(Return(1<<32-1));
+  ASSERT_TRUE(buf.IsActive());
+}
+
 TEST(SnoopTest, TestSnoop) {
   TestBuf buf(100);
   auto &la = buf.lock_abs;

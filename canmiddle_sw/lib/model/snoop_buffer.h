@@ -19,6 +19,12 @@ struct SnoopBuffer {
   }
   int32_t TimeRemainingMs() {
     LockGuard<LockAbstraction> l(lock_abs);
+    if (!isActive()) {
+      return 0;
+    }
+    if (end_ms == 0) {
+      return -1;
+    }
     return end_ms - lock_abs.Millis();
   }
 
@@ -33,7 +39,13 @@ struct SnoopBuffer {
       return false;
     }
     position = 0;
-    end_ms = lock_abs.Millis() + for_ms;
+    if (for_ms < 0) {
+      alwaysActive = true;
+      end_ms = 0;
+    } else {
+      alwaysActive = false;
+      end_ms = lock_abs.Millis() + for_ms;
+    }
     return true;
   }
 
@@ -64,8 +76,9 @@ struct SnoopBuffer {
  private:
   const size_t buf_size = 0;
   uint32_t end_ms = 0;
+  bool alwaysActive = false;
   SnoopBuffer(const SnoopBuffer &);  // or use c++0x ` = delete`
-  bool isActive() { return (end_ms > lock_abs.Millis()); };
+  bool isActive() { return alwaysActive || (end_ms > lock_abs.Millis()); };
 
  public:
   LockAbstraction lock_abs;
