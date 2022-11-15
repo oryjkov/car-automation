@@ -6,8 +6,8 @@
 
 #include "Arduino.h"
 #include "esp_abstraction.h"
-#include "io_abstraction.h"
 #include "go.h"
+#include "io_abstraction.h"
 #include "model.h"
 #include "mqtt.h"
 #include "props_logger.h"
@@ -21,8 +21,8 @@ PropsLogger props_logger;
 
 void InitModels(IOAbstraction *io) {
   car_model =
-      std::unique_ptr<Model<EspAbstraction>>(
-          new Model<EspAbstraction>(
+      std::unique_ptr<ConcreteModel>(
+          new ConcreteModel(
               {
                   .props =
                       {
@@ -49,25 +49,31 @@ void InitModels(IOAbstraction *io) {
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  40, },
                           // clang-format on
                       },
-                  .esp = EspAbstraction(io->twai_tx_queue),
+                  .lock_abs = LockAbstraction(),
+                  .queue_abs = QueueAbstraction(io->twai_tx_queue),
                   .can_enable_at_us = 0,
               }));
 
-  car_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
-      .props = {
+  car_ext_model = std::unique_ptr<ConcreteModel>(new ConcreteModel({
+      .props =
+          {
               // clang-format off
 { .prop = 0x1b00002c, .send_delay_ms =  22, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
               // clang-format on
-      },
-      .esp = EspAbstraction(io->twai_tx_queue),
+          },
+      .lock_abs = LockAbstraction(),
+      .queue_abs = QueueAbstraction(io->twai_tx_queue),
       .can_enable_at_us = 0,
   }));
 
-  display_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
-      .props =
-          {
-              // clang-format off
+  display_model =
+      std::unique_ptr<ConcreteModel>(
+          new ConcreteModel(
+              {
+                  .props =
+                      {
+                          // clang-format off
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  12, .val={}, .iteration = 1 },  // offset
 { .prop = 0x0520, .send_delay_ms =  0, .val = { .size = 1, .bytes = { 0x00, } } },
 { .prop = 0x0522, .send_delay_ms =  0, .val = { .size = 2, .bytes = { 0x00, 0x00, } } },
@@ -82,14 +88,18 @@ void InitModels(IOAbstraction *io) {
 { .prop = 0x0538, .send_delay_ms =  1, .val = { .size = 4, .bytes = { 0x20, 0x25, 0x80, 0x00, } } },
 { .prop = 0x0539, .send_delay_ms =  0, .val = { .size = 6, .bytes = { 0x24, 0x02, 0x24, 0x00, 0x00, 0x00, } } },
 { .prop = DELAY_ONLY_PROP, .send_delay_ms =  99, },
-              // clang-format on
-          },
-      .esp = EspAbstraction(io->twai_tx_queue),
-      .can_enable_at_us = 0,
-  }));
+                          // clang-format on
+                      },
+                  .lock_abs = LockAbstraction(),
+                  .queue_abs = QueueAbstraction(io->twai_tx_queue),
+                  .can_enable_at_us = 0,
+              }));
 
-  display_ext_model = std::unique_ptr<Model<EspAbstraction>>(new Model<EspAbstraction>({
-              // clang-format off
+  display_ext_model =
+      std::unique_ptr<ConcreteModel>(
+          new ConcreteModel(
+              {
+                  // clang-format off
       .props = {
 { .prop = 0x1b000046, .send_delay_ms =   0, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 1 },
 { .prop = 0x1b000046, .send_delay_ms =  10, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 2 },
@@ -103,10 +113,11 @@ void InitModels(IOAbstraction *io) {
 { .prop = 0x1b000046, .send_delay_ms =  10, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } }, .iteration = 10 },
 { .prop = 0x1b000046, .send_delay_ms = 100, .val = { .size = 8, .bytes = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, } } },
           },
-              // clang-format on
-      .esp = EspAbstraction(io->twai_tx_queue),
-      .can_enable_at_us = 0,
-  }));
+                  // clang-format on
+                  .lock_abs = LockAbstraction(),
+                  .queue_abs = QueueAbstraction(io->twai_tx_queue),
+                  .can_enable_at_us = 0,
+              }));
 
   props_logger = PropsLogger();
 }
@@ -205,7 +216,7 @@ void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uin
   // Check for the physical light button press which sets the selector to 0.
   if (prop == 0x528 && (getByte(3, new_v) != getByte(3, old_v))) {
     if (getByte(3, new_v) == 0) {
-      display_model->DisableCanFor(600);
+      display_model->DisableUpdatesFor(600);
       uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
       uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
       display_model->UpdateMasked(0x526, 4, mask, data);
@@ -238,28 +249,28 @@ void SetFridgePower(uint32_t power) {
   if (power < 0 || power > 6) {
     return;
   }
-  display_model->DisableCanFor(600);
+  display_model->DisableUpdatesFor(600);
   uint8_t mask[] = {7 << 1, 0x00, 0x00, 0x00};
   uint8_t data[] = {static_cast<uint8_t>(power << 1), 0x00, 0x00, 0x00};
   display_model->UpdateMasked(0x531, 4, mask, data);
 }
 
 void SetFridgeState(bool on) {
-  display_model->DisableCanFor(600);
+  display_model->DisableUpdatesFor(600);
   uint8_t mask[] = {1, 0x00, 0x00, 0x00};
   uint8_t data[] = {static_cast<uint8_t>(on), 0x00, 0x00, 0x00};
   display_model->UpdateMasked(0x531, 4, mask, data);
 }
 
 void LightsOff() {
-  display_model->DisableCanFor(1100);
+  display_model->DisableUpdatesFor(1100);
   display_model->Update(0x525, {.size = 5, .bytes = {0x8d, 0x46, 0x46, 0x1e, 0x1e}});
-  display_model->esp.Delay(300);
+  display_model->DelayMs(300);
   // The following clears out the active light (and also turns that off).
   // This line is only necessary when byte 3 of 0x528 is non-zero (i.e.
   // there is an active light).
   display_model->Update(0x526, {.size = 4, .bytes = {0x46, 0x00, 0x46, 0x46}});
-  display_model->esp.Delay(700);
+  display_model->DelayMs(700);
   display_model->Update(0x525, {.size = 5, .bytes = {0x8c, 0x46, 0x46, 0x1e, 0x1e}});
 }
 
@@ -269,7 +280,7 @@ void SetLight(LightsEnum light, uint8_t brightness, bool off) {
   if (search == lmp.end()) {
     return;
   }
-  display_model->DisableCanFor(600);
+  display_model->DisableUpdatesFor(600);
   const LightDescriptor &l = search->second;
 
   // Set Selector.
@@ -287,7 +298,7 @@ void SetLight(LightsEnum light, uint8_t brightness, bool off) {
 
   if (off) {
     // OFF is always the same, but we have to let the selector we just set propagate.
-    display_model->esp.Delay(300);
+    display_model->DelayMs(300);
     uint8_t mask[] = {0x00, 0xff, 0x00, 0x00};
     uint8_t data[] = {0x00, 0x00, 0x00, 0x00};
     display_model->UpdateMasked(0x526, 4, mask, data);

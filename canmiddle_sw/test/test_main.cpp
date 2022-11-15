@@ -10,7 +10,7 @@ using ::testing::Field;
 
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v) {}
 
-typedef Model<MockEspAbstraction> TestModel;
+typedef Model<MockLockAbstraction, MockQueueAbstraction> TestModel;
 
 TEST(ModelTest, GetBit) {
   ASSERT_EQ(getBit(0, (uint8_t *)"\x80"), 1);
@@ -33,12 +33,13 @@ TEST(ModelTest, SendState) {
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
   // clang-format on
-  MockEspAbstraction &esp = m.esp;
-  EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
-  EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
-  EXPECT_CALL(esp,
+  MockLockAbstraction &lock_abs = m.lock_abs;
+  MockQueueAbstraction &queue_abs = m.queue_abs;
+  EXPECT_CALL(lock_abs, Delay(m.props[0].send_delay_ms));
+  EXPECT_CALL(lock_abs, Delay(m.props[1].send_delay_ms));
+  EXPECT_CALL(queue_abs,
               Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x052a))));
-  EXPECT_CALL(esp,
+  EXPECT_CALL(queue_abs,
               Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x053a))));
 
   EXPECT_TRUE(m.SendState(1));
@@ -52,10 +53,11 @@ TEST(ModelTest, SendStateDelay) {
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
   // clang-format on
-  MockEspAbstraction &esp = m.esp;
-  EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
-  EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
-  EXPECT_CALL(esp,
+  MockLockAbstraction &lock_abs = m.lock_abs;
+  MockQueueAbstraction &queue_abs = m.queue_abs;
+  EXPECT_CALL(lock_abs, Delay(m.props[0].send_delay_ms));
+  EXPECT_CALL(lock_abs, Delay(m.props[1].send_delay_ms));
+  EXPECT_CALL(queue_abs,
               Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x053a))));
 
   EXPECT_TRUE(m.SendState(1));
@@ -69,31 +71,32 @@ TEST(ModelTest, SendStateRepetitions) {
 { .prop = 0x1b00002c, .send_delay_ms = 200, .val = { .size = 8, .bytes = { 0x2c, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, } } },
   }};
   // clang-format on
-  MockEspAbstraction &esp = m.esp;
-  EXPECT_CALL(esp, Delay(m.props[0].send_delay_ms));
+  MockLockAbstraction &lock_abs = m.lock_abs;
+  MockQueueAbstraction &queue_abs = m.queue_abs;
+  EXPECT_CALL(lock_abs, Delay(m.props[0].send_delay_ms));
   EXPECT_CALL(
-      esp,
+      queue_abs,
       Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
                     Field(&CanMessage::has_extended, true), Field(&CanMessage::extended, true))));
   EXPECT_TRUE(m.SendState(1));
 
-  EXPECT_CALL(esp, Delay(m.props[1].send_delay_ms));
+  EXPECT_CALL(lock_abs, Delay(m.props[1].send_delay_ms));
   EXPECT_CALL(
-      esp,
+      queue_abs,
       Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002d),
                     Field(&CanMessage::has_extended, true), Field(&CanMessage::extended, true))));
   EXPECT_TRUE(m.SendState(2));
 
-  EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
+  EXPECT_CALL(lock_abs, Delay(m.props[2].send_delay_ms));
   EXPECT_CALL(
-      esp,
+      queue_abs,
       Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
                     Field(&CanMessage::has_extended, true), Field(&CanMessage::has_prop, true))));
   EXPECT_TRUE(m.SendState(3));
 
-  EXPECT_CALL(esp, Delay(m.props[2].send_delay_ms));
+  EXPECT_CALL(lock_abs, Delay(m.props[2].send_delay_ms));
   EXPECT_CALL(
-      esp,
+      queue_abs,
       Enqueue(AllOf(Field(&CanMessage::has_prop, true), Field(&CanMessage::prop, 0x1b00002c),
                     Field(&CanMessage::has_extended, true), Field(&CanMessage::has_prop, true))));
   EXPECT_TRUE(m.SendState(4));
@@ -106,7 +109,8 @@ TEST(ModelTest, Update) {
 	 {.prop = 0x053a, .send_delay_ms = 0, .val = {.size = 1, .bytes = { 0x3a, }}},
   }};
   // clang-format on
-  MockEspAbstraction &esp = m.esp;
+  MockLockAbstraction &lock_abs = m.lock_abs;
+  MockQueueAbstraction &queue_abs = m.queue_abs;
 
   CanMessage msg = {
       .has_prop = true,

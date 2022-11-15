@@ -1,4 +1,5 @@
 #include "esp_abstraction.h"
+
 #include "message.pb.h"
 
 #if defined(ARDUINO)
@@ -11,11 +12,19 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-void EspAbstraction::Delay(int ms) { vTaskDelay(pdTICKS_TO_MS(ms)); };
-void EspAbstraction::Lock() { xSemaphoreTake(sem, portMAX_DELAY); }
-void EspAbstraction::Unlock() { xSemaphoreGive(sem); }
-int64_t EspAbstraction::Micros() { return esp_timer_get_time(); }
-void EspAbstraction::Enqueue(const CanMessage &msg) {
+void LockAbstraction::Delay(int ms) { vTaskDelay(pdTICKS_TO_MS(ms)); };
+void LockAbstraction::Lock() { xSemaphoreTake(sem, portMAX_DELAY); }
+void LockAbstraction::Unlock() { xSemaphoreGive(sem); }
+int64_t LockAbstraction::Micros() { return esp_timer_get_time(); }
+LockAbstraction::LockAbstraction() {
+  sem = xSemaphoreCreateMutex();
+  if (sem == nullptr) {
+    abort();
+  }
+}
+LockAbstraction::~LockAbstraction() { vSemaphoreDelete(sem); }
+
+void QueueAbstraction::Enqueue(const CanMessage &msg) {
   QueueElement *e = reinterpret_cast<QueueElement *>(malloc(sizeof(QueueElement)));
   if (e == nullptr) {
     ESP_LOGE(EXAMPLE_TAG, "malloc failed, free heap: %d\r\n", esp_get_free_heap_size());
@@ -32,12 +41,7 @@ void EspAbstraction::Enqueue(const CanMessage &msg) {
   }
 }
 
-EspAbstraction::EspAbstraction(QueueHandle_t q) : q(q) {
-  sem = xSemaphoreCreateMutex();
-  if (sem == nullptr) {
-    abort();
-  }
-}
-EspAbstraction::~EspAbstraction() { vSemaphoreDelete(sem); }
+QueueAbstraction::QueueAbstraction(QueueHandle_t q) : q(q) {}
+QueueAbstraction::~QueueAbstraction() { vSemaphoreDelete(q); }
 
 #endif

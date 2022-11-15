@@ -9,6 +9,8 @@ enum EventType {
   CAN_MESSAGE = 1,
   UART_MESSAGE = 2,
 };
+
+// Common representation of a message that is sent or received (UART or TWAI bus).
 typedef struct QUEUE_ELEMENT {
   EventType type;
   CanMessage msg;
@@ -37,18 +39,26 @@ struct LockGuard {
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-struct EspAbstraction {
+struct LockAbstraction {
   void Delay(int ms);
   void Lock();
   void Unlock();
-  void Enqueue(const CanMessage& msg);
   int64_t Micros();
 
-  EspAbstraction(QueueHandle_t q);
-  ~EspAbstraction();
+  LockAbstraction();
+  ~LockAbstraction();
 
  private:
   SemaphoreHandle_t sem;
+};
+
+struct QueueAbstraction {
+  void Enqueue(const CanMessage& msg);
+
+  QueueAbstraction(QueueHandle_t q);
+  ~QueueAbstraction();
+
+ private:
   QueueHandle_t q;
 };
 
@@ -56,12 +66,14 @@ struct EspAbstraction {
 
 #include <gmock/gmock.h>
 
-struct MockEspAbstraction {
+struct MockLockAbstraction {
   MOCK_METHOD(void, Delay, (int ms), ());
   MOCK_METHOD(void, Lock, (), ());
   MOCK_METHOD(void, Unlock, (), ());
-  MOCK_METHOD(void, Enqueue, (const CanMessage& msg), ());
   MOCK_METHOD(int64_t, Micros, (), ());
+};
+struct MockQueueAbstraction {
+  MOCK_METHOD(void, Enqueue, (const CanMessage& msg), ());
 };
 #endif
 

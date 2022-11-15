@@ -164,7 +164,7 @@ static void event_loop(void *arg) {
   }
 }
 
-IOAbstraction::IOAbstraction(cb *f) : recv_cb(f) {
+IOAbstraction::IOAbstraction(RecvCallback *recv_cb) : recv_cb(recv_cb) {
   const twai_filter_config_t accept_all_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   const twai_general_config_t normal_config =
       TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM, TWAI_MODE_NORMAL);
@@ -172,6 +172,8 @@ IOAbstraction::IOAbstraction(cb *f) : recv_cb(f) {
   ESP_LOGI(EXAMPLE_TAG, "Driver installed");
 
   esp_log_level_set(EXAMPLE_TAG, ESP_LOG_INFO);
+
+  // 
   rx_queue = xQueueCreate(10, sizeof(void *));
   if (rx_queue == 0) {
     ESP_LOGE(EXAMPLE_TAG, "cant create an rx queue");

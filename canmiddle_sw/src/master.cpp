@@ -1,6 +1,5 @@
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-
 #include <stdio.h>
+#include <memory>
 #include <stdlib.h>
 
 #include "driver/twai.h"
@@ -20,6 +19,8 @@
 
 #define UPDATE_TASK_PRIO 7
 
+using std::unique_ptr;
+
 bool passthrough = false;
 IOAbstraction *io;
 
@@ -33,7 +34,7 @@ QueueHandle_t control_q;
 // Calls send state on the model passed in the argument.
 // Can be started/stopped via a message on control_q.
 static void send_state(void *arg) {
-  Model<EspAbstraction> *model = reinterpret_cast<Model<EspAbstraction> *>(arg);
+  ConcreteModel *model = reinterpret_cast<ConcreteModel *>(arg);
   Command cmd;
   xQueuePeek(control_q, &cmd, portMAX_DELAY);
   uint32_t iteration = 1;
@@ -66,28 +67,26 @@ void start_send_state() { toggle_send_state(START); }
 void stop_send_state() { toggle_send_state(STOP); }
 
 void QueueRecvCallback(QueueElement *e) {
-  if (e->type == CAN_MESSAGE) {
+  unique_ptr<QueueElement> pe(e);
+  if (pe->type == CAN_MESSAGE) {
     if (passthrough) {
-      io->SendOverUART(e);
+      io->SendOverUART(pe.release());
     } else {
       // Update the Car model with the incoming value.
-      car_model->UpdateState(e->msg);
-      free(e);
+      car_model->UpdateState(pe->msg);
     }
-  } else if (e->type == UART_MESSAGE) {
+  } else if (pe->type == UART_MESSAGE) {
     if (passthrough) {
-      io->SendOverTWAI(e);
+      io->SendOverTWAI(pe.release());
     } else {
       // Update the Display model with the incoming value.
-      display_model->UpdateState(e->msg);
+      display_model->UpdateState(pe->msg);
       // Magic message that starts off comms.
-      if (e->msg.prop == 0x1b000046) {
+      if (pe->msg.prop == 0x1b000046) {
         start_send_state();
       }
-      free(e);
     }
   } else {
-    free(e);
     ESP_LOGE(EXAMPLE_TAG, "wrong event queue element type");
     abort();
   }
@@ -105,6 +104,7 @@ void master_loop() {
     abort();
   }
 
+  // Runs the tasks that send state, 2 each for car and display.
   xTaskCreatePinnedToCore(send_state, "upd_car", 4096, car_model.get(), UPDATE_TASK_PRIO, NULL,
                           tskNO_AFFINITY);
   xTaskCreatePinnedToCore(send_state, "upd_ext_car", 4096, car_ext_model.get(), UPDATE_TASK_PRIO,
@@ -114,6 +114,7 @@ void master_loop() {
   xTaskCreatePinnedToCore(send_state, "upd_ext_disp", 4096, display_ext_model.get(),
                           UPDATE_TASK_PRIO, NULL, tskNO_AFFINITY);
 
+  // blocks indefinitely.
   xSemaphoreTake(done_sem, portMAX_DELAY);
   // event_loop();
   ESP_ERROR_CHECK(twai_stop());

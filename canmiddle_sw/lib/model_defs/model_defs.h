@@ -7,11 +7,12 @@
 #include "model.h"
 #include "Arduino.h"
 #include "io_abstraction.h"
+#include "esp_abstraction.h"
 #include "props_logger.h"
 
 void HandlePropUpdate(uint32_t prop, size_t len, const uint8_t *new_v, const uint8_t *old_v);
 
-typedef Model<EspAbstraction> ConcreteModel;
+typedef Model<LockAbstraction, QueueAbstraction> ConcreteModel;
 
 extern std::unique_ptr<ConcreteModel> car_model;
 extern std::unique_ptr<ConcreteModel> display_model;
@@ -24,7 +25,7 @@ void InitModels(IOAbstraction *io);
 
 template <typename M>
 void DebugSet(M *m, uint32_t prop, const Value v) {
-  m->DisableCanFor(500);
+  m->DisableUpdatesFor(500);
   m->Update(prop, v);
 }
 
