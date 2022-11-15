@@ -156,6 +156,14 @@ void setup() {
       props_logger.filter(key);
       request->send(500, "text/plain", "ok\r\n");
     });
+    server.on("/get_props", HTTP_GET, [](AsyncWebServerRequest *request) {
+      props_logger.buf.Lock();
+      AsyncWebServerResponse *response = request->beginResponse_P(
+          200, "application/octet-stream", props_logger.buf.buffer, props_logger.buf.position);
+      props_logger.buf.Unlock();
+      request->send(response);
+    });
+
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request) {
       if (!request->hasParam("k") || !request->hasParam("v")) {
         request->send(500, "text/plain", "k,v are required\r\n");
