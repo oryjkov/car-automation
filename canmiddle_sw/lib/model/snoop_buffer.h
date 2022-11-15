@@ -63,6 +63,8 @@ struct SnoopBuffer {
     bool status = pb_encode(&stream, &SnoopData_msg, &s);
     if (!status) {
       // ESP_LOGW(TAG, "Encoding failed: %s\r\n", PB_GET_ERROR(&stream));
+      // Reset the buffer.
+      position = 0;
       return false;
     }
 

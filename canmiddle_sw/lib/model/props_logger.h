@@ -27,6 +27,7 @@ struct PropsLogger {
     if (len>8) {
       return false;
     }
+
     {
       LockGuard<LockAbstraction> l(lock_abs);
       if (filtered_props.count(prop) > 0) {

@@ -73,3 +73,19 @@ TEST(SnoopTest, TestActivateResetsBuffer) {
   ASSERT_TRUE(buf.Activate(200));
   ASSERT_EQ(buf.position, 0);
 }
+
+TEST(SnoopTest, TestSnoopRollover) {
+  TestBuf buf(10);
+  auto &la = buf.lock_abs;
+  EXPECT_CALL(la, Millis()).WillRepeatedly(Return(0));
+
+  buf.Activate(100);
+  ASSERT_EQ(buf.position, 0);
+  ASSERT_TRUE(buf.Snoop(SnoopData_init_zero));
+  ASSERT_EQ(buf.position, 9);
+  ASSERT_FALSE(buf.Snoop(SnoopData_init_zero));
+  ASSERT_EQ(buf.position, 0);  // Resets on full, but loses one message.
+
+  ASSERT_TRUE(buf.Snoop(SnoopData_init_zero));
+  ASSERT_EQ(buf.position, 9);
+}
