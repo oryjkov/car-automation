@@ -29,11 +29,9 @@ static void twai_tx_task(void *arg) {
       continue;
     }
 
-    if (io->snoop_buffer->IsActive()) {
-      io->snoop_buffer->Snoop({.message = e->msg,
-                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                       .source = Metadata_Source_MASTER_TX}});
-    }
+    io->snoop_buffer->Snoop({.message = e->msg,
+                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                          .source = Metadata_Source_MASTER_TX}});
 
     twai_message_t tx_msg = {
         .extd = e->msg.has_extended,
@@ -60,11 +58,9 @@ static void uart_tx_task(void *arg) {
       continue;
     }
 
-    if (io->snoop_buffer->IsActive()) {
-      io->snoop_buffer->Snoop({.message = e->msg,
-                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                       .source = Metadata_Source_SLAVE_TX}});
-    }
+    io->snoop_buffer->Snoop({.message = e->msg,
+                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                          .source = Metadata_Source_SLAVE_TX}});
 
     if (!send_over_uart(e->msg)) {
       ESP_LOGE(EXAMPLE_TAG, "uart send failed");
@@ -101,11 +97,9 @@ static void twai_receive_task(void *arg) {
         .event_us = esp_timer_get_time(),
     };
     memcpy(e->msg.value.bytes, rx_message.data, rx_message.data_length_code);
-    if (io->snoop_buffer->IsActive()) {
-      io->snoop_buffer->Snoop({.message = e->msg,
-                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                       .source = Metadata_Source_MASTER}});
-    }
+    io->snoop_buffer->Snoop({.message = e->msg,
+                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                          .source = Metadata_Source_MASTER}});
 
     if (xQueueSendToBack(io->rx_queue, &e, 0) != pdTRUE) {
       free(e);
@@ -134,11 +128,9 @@ static void uart_receive_task(void *arg) {
     e->event_us = esp_timer_get_time();
     ESP_LOGI(EXAMPLE_TAG, "Received msg on uart, prop: %d", e->msg.prop);
 
-    if (io->snoop_buffer->IsActive()) {
-      io->snoop_buffer->Snoop({.message = e->msg,
-                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                       .source = Metadata_Source_SLAVE}});
-    }
+    io->snoop_buffer->Snoop({.message = e->msg,
+                             .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                          .source = Metadata_Source_SLAVE}});
 
     if (xQueueSendToBack(io->rx_queue, &e, 0) != pdTRUE) {
       free(e);

@@ -67,6 +67,7 @@ struct MockLockAbstraction {
   MOCK_METHOD(void, Lock, (), ());
   MOCK_METHOD(void, Unlock, (), ());
   MOCK_METHOD(int64_t, Micros, (), ());
+  MOCK_METHOD(uint32_t, Millis, (), ());
 };
 struct MockQueueAbstraction {
   MOCK_METHOD(void, Enqueue, (const CanMessage& msg), ());

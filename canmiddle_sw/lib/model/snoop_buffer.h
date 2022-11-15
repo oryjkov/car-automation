@@ -19,23 +19,31 @@ struct SnoopBuffer {
   }
   int32_t TimeRemainingMs() {
     LockGuard<LockAbstraction> l(lock_abs);
-    return lock_abs.Millis() - end_ms;
+    return end_ms - lock_abs.Millis();
   }
 
   bool IsActive() {
     LockGuard<LockAbstraction> l(lock_abs);
-    return (end_ms > lock_abs.Millis());
+    return isActive();
   }
 
-  void Activate(int32_t for_ms) {
+  bool Activate(int32_t for_ms) {
     LockGuard<LockAbstraction> l(lock_abs);
+    if (isActive()) {
+      return false;
+    }
+    position = 0;
     end_ms = lock_abs.Millis() + for_ms;
+    return true;
   }
 
   void Unlock() { lock_abs.Unlock(); }
   void Lock() { lock_abs.Lock(); }
   bool Snoop(const SnoopData &s) {
     LockGuard<LockAbstraction> l(lock_abs);
+    if (!isActive()) {
+      return false;
+    }
     size_t start_from = position;
     uint8_t *length_field = buffer + position;
     start_from += 1;
@@ -56,9 +64,11 @@ struct SnoopBuffer {
  private:
   const size_t buf_size = 0;
   uint32_t end_ms = 0;
+  SnoopBuffer(const SnoopBuffer &);  // or use c++0x ` = delete`
+  bool isActive() { return (end_ms > lock_abs.Millis()); };
 
+ public:
   LockAbstraction lock_abs;
-  SnoopBuffer(const SnoopBuffer&);  // or use c++0x ` = delete`
 };
 
 #endif  // __SNOOP_BUFFER__
