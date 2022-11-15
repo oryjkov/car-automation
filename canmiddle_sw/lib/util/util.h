@@ -6,7 +6,6 @@
 #include <pb_encode.h>
 
 #include "message.pb.h"
-#include "snoop_buffer.h"
 
 #define EXAMPLE_TAG "TWAI Self Test"
 

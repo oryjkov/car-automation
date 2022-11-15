@@ -17,15 +17,10 @@ typedef struct QUEUE_ELEMENT {
   int64_t event_us;
 } QueueElement;
 
-
 template <typename Mutex>
 struct LockGuard {
-  LockGuard(Mutex& mutex) : _ref(mutex) {
-    _ref.Lock();
-  };
-  ~LockGuard() {
-    _ref.Unlock();
-  }
+  LockGuard(Mutex& mutex) : _ref(mutex) { _ref.Lock(); };
+  ~LockGuard() { _ref.Unlock(); }
 
  private:
   LockGuard(const LockGuard&);  // or use c++0x ` = delete`
@@ -44,6 +39,7 @@ struct LockAbstraction {
   void Lock();
   void Unlock();
   int64_t Micros();
+  uint32_t Millis();
 
   LockAbstraction();
   ~LockAbstraction();

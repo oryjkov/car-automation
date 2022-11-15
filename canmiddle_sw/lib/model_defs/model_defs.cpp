@@ -17,7 +17,7 @@ std::unique_ptr<ConcreteModel> display_model;
 std::unique_ptr<ConcreteModel> car_ext_model;
 std::unique_ptr<ConcreteModel> display_ext_model;
 
-PropsLogger props_logger;
+PropsLogger<LockAbstraction> props_logger;
 
 void InitModels(IOAbstraction *io) {
   car_model =
@@ -118,8 +118,6 @@ void InitModels(IOAbstraction *io) {
                   .queue_abs = QueueAbstraction(io->twai_tx_queue),
                   .can_enable_at_us = 0,
               }));
-
-  props_logger = PropsLogger();
 }
 
 void PublishOnOff(const String &light, bool state) {

@@ -32,6 +32,9 @@ AsyncWebServer server(80);
 const char *ssid = SECRET_WIFI_SSID;
 const char *password = SECRET_WIFI_PASSWORD;
 
+constexpr size_t snoop_buffer_max_size = 50 * (1 << 10);
+SnoopBuffer<LockAbstraction> snoop_buffer(snoop_buffer_max_size);
+
 TimerHandle_t wifiReconnectTimer;
 extern TimerHandle_t mqttReconnectTimer;
 
@@ -62,7 +65,7 @@ void WiFiEvent(WiFiEvent_t event) {
 }
 
 void canbus_check();
-void master_loop();
+void master_loop(SnoopBuffer<LockAbstraction> *snoop_buffer);
 void start_send_state();
 void stop_send_state();
 extern bool passthrough;
@@ -222,7 +225,7 @@ void setup() {
         snoop_buffer.Activate(duration_ms);
         snoop_buffer.position = 0;
         response->printf("Snoop started. will run for %d buffer available: %d", duration_ms,
-                         snoop_buffer_max_size);
+                         snoop_buffer.Capacity());
       }
       request->send(response);
     });
@@ -230,12 +233,12 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1);
     Serial.println("master_loop");
     passthrough = false;
-    master_loop();
+    master_loop(&snoop_buffer);
     Serial.println("master_loop returned");
   } else if (r == SLAVE) {
     digitalWrite(LED_BUILTIN, 0);
     passthrough = true;
-    master_loop();
+    master_loop(&snoop_buffer);
   } else {
     Serial.printf("role unknown: %d\n", r);
     while (1) {

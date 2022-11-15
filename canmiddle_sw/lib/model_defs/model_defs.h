@@ -19,7 +19,7 @@ extern std::unique_ptr<ConcreteModel> display_model;
 extern std::unique_ptr<ConcreteModel> car_ext_model;
 extern std::unique_ptr<ConcreteModel> display_ext_model;
 
-extern PropsLogger props_logger;
+extern PropsLogger<LockAbstraction> props_logger;
 
 void InitModels(IOAbstraction *io);
 

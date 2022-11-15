@@ -92,10 +92,10 @@ void QueueRecvCallback(QueueElement *e) {
   }
 }
 
-void master_loop() {
+void master_loop(SnoopBuffer<LockAbstraction> *snoop_buffer) {
   SemaphoreHandle_t done_sem = xSemaphoreCreateBinary();
 
-  io = new IOAbstraction(QueueRecvCallback);
+  io = new IOAbstraction(QueueRecvCallback, snoop_buffer);
   InitModels(io);
 
   control_q = xQueueCreate(1, sizeof(Command));

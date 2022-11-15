@@ -2,6 +2,7 @@
 #define __IO_ABSTRACTION_H__
 
 #include "esp_abstraction.h"
+#include "snoop_buffer.h"
 
 #if defined(ARDUINO)
 #include "freertos/FreeRTOS.h"
@@ -13,7 +14,7 @@ struct IOAbstraction {
   typedef void RecvCallback(QueueElement *);
 
   // Callback must free() its argument when done.
-  IOAbstraction(RecvCallback *f);
+  IOAbstraction(RecvCallback *f, SnoopBuffer<LockAbstraction> *snoop_buffer);
 
   // Puts message on the UART tx queue.
   void SendOverUART(QueueElement *e);
@@ -31,8 +32,10 @@ struct IOAbstraction {
   // This callback is called for every incoming TWAI and UART message.
   // It is called from a separate thread.
   RecvCallback *recv_cb;
+
+  SnoopBuffer<LockAbstraction> *snoop_buffer;
 };
- 
+
 #endif  // defined(ARDUINO)
 
 #endif  // __IO_ABSTRACTION_H__

@@ -5,6 +5,7 @@
 #if defined(ARDUINO)
 
 #include "esp_err.h"
+#include "Arduino.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -16,6 +17,7 @@ void LockAbstraction::Delay(int ms) { vTaskDelay(pdTICKS_TO_MS(ms)); };
 void LockAbstraction::Lock() { xSemaphoreTake(sem, portMAX_DELAY); }
 void LockAbstraction::Unlock() { xSemaphoreGive(sem); }
 int64_t LockAbstraction::Micros() { return esp_timer_get_time(); }
+uint32_t LockAbstraction::Millis() { return millis(); }
 LockAbstraction::LockAbstraction() {
   sem = xSemaphoreCreateMutex();
   if (sem == nullptr) {

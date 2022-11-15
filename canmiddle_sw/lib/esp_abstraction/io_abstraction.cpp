@@ -6,9 +6,9 @@
 #include "driver/uart.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "util.h"
-#include "snoop_buffer.h"
 #include "freertos/task.h"
+#include "snoop_buffer.h"
+#include "util.h"
 
 constexpr gpio_num_t TX_GPIO_NUM = GPIO_NUM_25;
 constexpr gpio_num_t RX_GPIO_NUM = GPIO_NUM_26;
@@ -29,10 +29,10 @@ static void twai_tx_task(void *arg) {
       continue;
     }
 
-    if (snoop_buffer.IsActive()) {
-      snoop_buffer.Snoop({.message = e->msg,
-                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                              .source = Metadata_Source_MASTER_TX}});
+    if (io->snoop_buffer->IsActive()) {
+      io->snoop_buffer->Snoop({.message = e->msg,
+                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                       .source = Metadata_Source_MASTER_TX}});
     }
 
     twai_message_t tx_msg = {
@@ -60,10 +60,10 @@ static void uart_tx_task(void *arg) {
       continue;
     }
 
-    if (snoop_buffer.IsActive()) {
-      snoop_buffer.Snoop({.message = e->msg,
-                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                              .source = Metadata_Source_SLAVE_TX}});
+    if (io->snoop_buffer->IsActive()) {
+      io->snoop_buffer->Snoop({.message = e->msg,
+                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                       .source = Metadata_Source_SLAVE_TX}});
     }
 
     if (!send_over_uart(e->msg)) {
@@ -101,10 +101,10 @@ static void twai_receive_task(void *arg) {
         .event_us = esp_timer_get_time(),
     };
     memcpy(e->msg.value.bytes, rx_message.data, rx_message.data_length_code);
-    if (snoop_buffer.IsActive()) {
-      snoop_buffer.Snoop({.message = e->msg,
-                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                              .source = Metadata_Source_MASTER}});
+    if (io->snoop_buffer->IsActive()) {
+      io->snoop_buffer->Snoop({.message = e->msg,
+                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                       .source = Metadata_Source_MASTER}});
     }
 
     if (xQueueSendToBack(io->rx_queue, &e, 0) != pdTRUE) {
@@ -134,10 +134,10 @@ static void uart_receive_task(void *arg) {
     e->event_us = esp_timer_get_time();
     ESP_LOGI(EXAMPLE_TAG, "Received msg on uart, prop: %d", e->msg.prop);
 
-    if (snoop_buffer.IsActive()) {
-      snoop_buffer.Snoop({.message = e->msg,
-                                 .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
-                                              .source = Metadata_Source_SLAVE}});
+    if (io->snoop_buffer->IsActive()) {
+      io->snoop_buffer->Snoop({.message = e->msg,
+                          .metadata = {.recv_us = static_cast<uint64_t>(e->event_us),
+                                       .source = Metadata_Source_SLAVE}});
     }
 
     if (xQueueSendToBack(io->rx_queue, &e, 0) != pdTRUE) {
@@ -164,7 +164,8 @@ static void event_loop(void *arg) {
   }
 }
 
-IOAbstraction::IOAbstraction(RecvCallback *recv_cb) : recv_cb(recv_cb) {
+IOAbstraction::IOAbstraction(RecvCallback *recv_cb, SnoopBuffer<LockAbstraction> *snoop_buffer)
+    : recv_cb(recv_cb), snoop_buffer(snoop_buffer) {
   const twai_filter_config_t accept_all_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   const twai_general_config_t normal_config =
       TWAI_GENERAL_CONFIG_DEFAULT(TX_GPIO_NUM, RX_GPIO_NUM, TWAI_MODE_NORMAL);
@@ -173,7 +174,7 @@ IOAbstraction::IOAbstraction(RecvCallback *recv_cb) : recv_cb(recv_cb) {
 
   esp_log_level_set(EXAMPLE_TAG, ESP_LOG_INFO);
 
-  // 
+  //
   rx_queue = xQueueCreate(10, sizeof(void *));
   if (rx_queue == 0) {
     ESP_LOGE(EXAMPLE_TAG, "cant create an rx queue");
@@ -218,5 +219,5 @@ void IOAbstraction::SendOverTWAI(QueueElement *e) {
   }
 }
 #else
- 
+
 #endif  // defined(ARDUINO)
