@@ -50,7 +50,7 @@ void InitModels(IOAbstraction *io) {
                           // clang-format on
                       },
                   .lock_abs = LockAbstraction(),
-                  .queue_abs = QueueAbstraction(io->twai_tx_queue),
+                  .queue_abs = QueueAbstraction(io->uart_tx_queue),
                   .can_enable_at_us = 0,
               }));
 
@@ -63,7 +63,7 @@ void InitModels(IOAbstraction *io) {
               // clang-format on
           },
       .lock_abs = LockAbstraction(),
-      .queue_abs = QueueAbstraction(io->twai_tx_queue),
+      .queue_abs = QueueAbstraction(io->uart_tx_queue),
       .can_enable_at_us = 0,
   }));
 

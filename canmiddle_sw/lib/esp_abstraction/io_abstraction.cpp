@@ -184,7 +184,7 @@ IOAbstraction::IOAbstraction(RecvCallback *recv_cb, SnoopBuffer<LockAbstraction>
   }
 
   ESP_ERROR_CHECK(twai_start());
-  xTaskCreatePinnedToCore(event_loop, "loop", 4096, NULL, CTRL_TASK_PRIO, NULL, tskNO_AFFINITY);
+  xTaskCreatePinnedToCore(event_loop, "loop", 4096, this, CTRL_TASK_PRIO, NULL, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(twai_tx_task, "TWAI_tx", 4096, this, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(uart_tx_task, "UART_tx", 4096, this, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
   xTaskCreatePinnedToCore(twai_receive_task, "TWAI_rx", 4096, this, RX_TASK_PRIO, NULL,
