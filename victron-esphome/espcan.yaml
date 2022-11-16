@@ -89,8 +89,8 @@ time:
 canbus:
   - platform: esp32_can
     can_id: 0x0
-    tx_pin: GPIO25
-    rx_pin: GPIO26
+    tx_pin: GPIO26
+    rx_pin: GPIO25
     bit_rate: 500kbps
     on_frame:
     - can_id: 0x528
