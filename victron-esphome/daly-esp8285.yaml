@@ -7,7 +7,8 @@ esp8266:
 # Enable logging
 logger:
   level: DEBUG
-  baud_rate: 0
+  baud_rate: 115200
+  hardware_uart: UART1
 
 # Enable Home Assistant API
 api:
@@ -25,17 +26,13 @@ wifi:
     ssid: !secret fallback_ssid
     password: !secret fallback_password
 
-  manual_ip:
-    static_ip: 192.168.235.231
-    gateway: 192.168.235.5
-    subnet: 255.255.255.0
-
 captive_portal:
 
-status_led:
-  pin:
-    number: GPIO2
-    inverted: true
+# status_led uses the same pin GPIO2 as UART1, for now UART1 is more useful.
+#status_led:
+  #pin:
+    #number: GPIO2
+    #inverted: true
 
 uart:
   tx_pin: GPIO1
