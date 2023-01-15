@@ -13,7 +13,6 @@ wifi:
     ssid: !secret fallback_ssid
     password: !secret fallback_password
 
-
 web_server:
   port: 80
 
@@ -32,13 +31,18 @@ status_led:
     inverted: true
 
 light:
-  - platform: rgbww
+  - platform: cwww
+    name: "Livingroom Lights"
+    cold_white: cold_white_channel
+    warm_white: warm_white_channel
+    cold_white_color_temperature: 6536 K
+    warm_white_color_temperature: 2000 K
+    constant_brightness: true
+  - platform: rgb
     name: "LED strip"
     red: red_channel
     green: green_channel
     blue: blue_channel
-    cold_white: cold_white_channel
-    warm_white: warm_white_channel
 
 output:
   - platform: esp8266_pwm
