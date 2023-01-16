@@ -6,6 +6,9 @@ esp8266:
 
 # Enable logging
 logger:
+  level: DEBUG
+  baud_rate: 115200
+  hardware_uart: UART1
 
 # Enable Home Assistant API
 api:
@@ -23,30 +26,10 @@ wifi:
     ssid: !secret fallback_ssid
     password: !secret fallback_password
 
-  manual_ip:
-    static_ip: 192.168.235.230
-    gateway: 192.168.235.5
-    subnet: 255.255.255.0
-
 captive_portal:
 
 external_components:
   - source: github://KinDR007/VictronMPPT-ESPHOME@main
-
-light:
-  - platform: status_led
-    name: "Status LED"
-    pin:
-      number: GPIO2
-      inverted: true
-    effects:
-      - strobe:
-          name: "Strobe"
-          colors:
-            - state: True
-              duration: 300ms
-            - state: False
-              duration: 1000ms
 
 uart:
   id: uart0
