@@ -32,14 +32,14 @@ status_led:
 
 light:
   - platform: cwww
-    name: "Livingroom Lights"
+    name: "White light"
     cold_white: cold_white_channel
     warm_white: warm_white_channel
     cold_white_color_temperature: 6536 K
     warm_white_color_temperature: 2000 K
     constant_brightness: true
   - platform: rgb
-    name: "LED strip"
+    name: "Color light"
     red: red_channel
     green: green_channel
     blue: blue_channel
