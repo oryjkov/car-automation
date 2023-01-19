@@ -10,7 +10,21 @@ automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
+owntracks:
+
 recorder:
   purge_keep_days: 720
   auto_purge: true
   db_url: !secret mysql_db
+
+# This allows recording of location which comes as attributes from the OwnTracks integration.
+template:
+  - sensor:
+      name: "Camper Latitude"
+      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.latitude)) | float }}{% endif %}'
+  - sensor:
+      name: "Camper Longitude"
+      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.longitude)) | float }}{% endif %}'
+  - sensor:
+      name: "Camper GPS Accuracy"
+      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.gps_accuracy)) | float }}{% endif %}'
