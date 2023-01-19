@@ -21,10 +21,10 @@ recorder:
 template:
   - sensor:
       name: "Camper Latitude"
-      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.latitude)) | float }}{% endif %}'
+      state: '{% if state_attr("device_tracker.camper_bonito", "latitude") %}{{ ((state_attr("device_tracker.camper_bonito", "latitude"))) | float }}{% endif %}'
   - sensor:
       name: "Camper Longitude"
-      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.longitude)) | float }}{% endif %}'
+      state: '{% if state_attr("device_tracker.camper_bonito", "longitude") %}{{ ((state_attr("device_tracker.camper_bonito", "longitude"))) | float }}{% endif %}'
   - sensor:
       name: "Camper GPS Accuracy"
-      state: '{% if states.device_tracker.camper_bonito %}{{ ((states.device_tracker.camper_bonito.attributes.gps_accuracy)) | float }}{% endif %}'
+      state: '{% if state_attr("device_tracker.camper_bonito", "gps_accuracy") %}{{ ((state_attr("device_tracker.camper_bonito", "gps_accuracy"))) | float }}{% endif %}'
