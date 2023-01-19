@@ -1,5 +1,5 @@
 esphome:
-  name: bms-esp8285
+  name: bms
 
 esp8266:
   board: esp8285
