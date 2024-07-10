@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::Parser;
-use futures::{stream::StreamExt, AsyncReadExt, SinkExt};
+use futures::{stream::StreamExt, SinkExt};
 use std::io::Cursor;
 use std::io::{self};
 use tokio_serial::SerialPortBuilderExt;
@@ -43,7 +43,7 @@ impl Decoder for LineCodec {
             if src.len() - p.0 == 13 {
                 return Ok(Some(src.split().freeze()));
             }
-            println!("read {} bytes", src.len());
+            // println!("read {} bytes", src.len());
         }
         Ok(None)
 
@@ -68,6 +68,14 @@ impl Encoder<Bytes> for LineCodec {
     }
 }
 
+fn make_req(cmd: u8) -> Bytes {
+    let mut b = BytesMut::from(&b"\xA5\x40\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00"[..]);
+    b[2] = cmd;
+    let cksum = b[0..12].iter().fold(0u8, |a, b| a.wrapping_add(*b));
+    b.put_u8(cksum);
+    b.freeze()
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let mut port = tokio_serial::new("/dev/ttyS0", 9600).open_native_async()?;
@@ -76,36 +84,38 @@ async fn main() -> Result<()> {
     let mut reader = LineCodec.framed(port);
     println!("starting serial read");
 
-    let mut b = BytesMut::from(&b"\xA5\x80\x90\x08\x00\x00\x00\x00\x00\x00\x00\x00"[..]);
-    let cksum = b[0..4].iter().fold(0u8, |a, b| a.wrapping_add(*b));
-    // b[0].unchecked_add(b[1]) + b[1] + b[2] + b[3];
-    b.put_u8(cksum);
-    let b = b.freeze();
+    let b = make_req(0x90);
+    // let b = make_req(0x61);
     println!("will send {} bytes: {:?}", b.len(), b);
     reader.send(b).await?;
 
     while let Some(line_result) = reader.next().await {
-        let line = line_result.expect("Failed to read line");
-        let mut rdr = Cursor::new(&line[4..]);
-        match line[2] {
+        let b = line_result.expect("Failed to read line");
+        println!("got {:?}", b);
+        let cksum = b[0..12].iter().fold(0u8, |a, b| a.wrapping_add(*b));
+        if cksum != b[12] {
+            println!("checksum failed, {} != {}", cksum, b[12]);
+            continue;
+        }
+        let mut rdr = Cursor::new(&b[4..]);
+        match b[2] {
             0x90 => {
-                let cum_volts = rdr.read_u16::<BigEndian>().unwrap();
-                let gather_volts = rdr.read_u16::<BigEndian>().unwrap();
-                let current = rdr.read_u16::<BigEndian>().unwrap();
-                let soc = rdr.read_u16::<BigEndian>().unwrap();
-                println!("SOC, cum_volts: {cum_volts}, gather_volts: {gather_volts}, current: {current}, soc: {soc}");
+                let cum_volts = rdr.read_u16::<BigEndian>().unwrap() as f64 / 10.;
+                let _ = rdr.read_u16::<BigEndian>().unwrap();
+                let current = (rdr.read_u16::<BigEndian>().unwrap() as f64 - 30000.) / 10.;
+                let soc = rdr.read_u16::<BigEndian>().unwrap() as f64 / 10.;
+                println!("SOC, cum_volts: {cum_volts}, current: {current}, soc: {soc}");
             }
             0x93 => {
                 let state = rdr.read_u8().unwrap();
                 let charge_mos = rdr.read_u8().unwrap();
                 let discharge_mos = rdr.read_u8().unwrap();
                 let bms_life = rdr.read_u8().unwrap();
-                let mah = rdr.read_u32::<BigEndian>().unwrap();
+                let mah = rdr.read_u32::<BigEndian>().unwrap() as f64 / 1000.;
                 println!("mos status, mah: {mah}, life: {bms_life}");
             }
             _ => {}
         }
-        println!("{:?}", line);
     }
     Ok(())
 }
