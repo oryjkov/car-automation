@@ -4,7 +4,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::Parser;
 use futures::{stream::StreamExt, SinkExt};
 use lazy_static::lazy_static;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -110,7 +110,7 @@ lazy_static! {
             }),
         });
 
-        let entities = vec![
+        let mut entities = vec![
             (
                 "soc".to_string(),
                 Arc::new(MqttEntity {
@@ -169,6 +169,19 @@ lazy_static! {
             ("charge_mos".to_string(), charge_mos.clone()),
             ("discharge_mos".to_string(), discharge_mos.clone()),
         ];
+        for i in 1..5 {
+            entities.push((
+                format!("Cell {}", i),
+                Arc::new(MqttEntity {
+                    name: format!("Cell {} Voltage", i),
+                    component_type: "sensor".to_string(),
+                    object_id: format!("cell-{}-voltage", i),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/cell-{}-voltage", i),
+                    unit: Some("V".to_string()),
+                    command: None,
+                }),
+            ));
+        }
         let mut command_topic_to_entity = HashMap::new();
         let mut command_to_entity = HashMap::new();
         let mut entity_to_command = HashMap::new();
@@ -239,10 +252,7 @@ async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
         .map(|(_, e)| e.discovery_msg())
         .collect();
     for (topic, msg) in d {
-        client
-            .publish(&topic, QoS::AtLeastOnce, false, msg)
-            .await
-            .unwrap();
+        client.publish(&topic, QoS::AtLeastOnce, false, msg).await?;
     }
 
     let d: Vec<_> = BMS
@@ -312,10 +322,14 @@ impl Decoder for DalyMsg {
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        debug!("in_tmp: {:02X?}", src.to_vec());
         let p = src.iter().enumerate().find(|(_, x)| **x == 0xa5u8);
         if let Some(p) = p {
-            if src.len() - p.0 == 13 {
-                return Ok(Some(src.split().freeze()));
+            let _ = src.split_to(p.0);
+            if src.len() >= 13 {
+                let msg_in = src.split_to(13).freeze();
+                info!("in\t{:02X?}", msg_in.to_vec());
+                return Ok(Some(msg_in));
             }
         }
         Ok(None)
@@ -331,6 +345,55 @@ impl Encoder<Bytes> for DalyMsg {
         Ok(())
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decode() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c, r);
+    }
+
+    #[test]
+    fn test_decode_two() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D, // 1
+            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert_eq!(b.len(), 13);
+        assert_eq!(c[0..13], r);
+
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c[13..], r);
+    }
+    #[test]
+    fn test_decode_messy() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x7D, // not full
+            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c[12..], r);
+    }
+}
 
 fn make_req(cmd: u8, arg1: u8) -> Bytes {
     let mut b = BytesMut::from(&b"\xA5\x40\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00"[..]);
@@ -343,7 +406,6 @@ fn make_req(cmd: u8, arg1: u8) -> Bytes {
 }
 
 async fn parse_msg(msg: Bytes) -> Result<()> {
-    info!("in\t{:02X?}", msg.to_vec());
     let cksum = msg[0..12].iter().fold(0u8, |a, b| a.wrapping_add(*b));
     if cksum != msg[12] {
         return Err(anyhow!(format!(
@@ -429,6 +491,28 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
                 .unwrap()
                 .update_msg(serde_json::to_vec(&ah).unwrap());
             mqtt_tx.send(m).await?;
+        }
+        0x95 => {
+            // The docs said nothing about frame-1.
+            let frame_num = rdr.read_u8().unwrap() as usize - 1;
+            if frame_num != 0 && frame_num != 1 {
+                return Err(anyhow!(format!("unexpected frame num: {:?}", frame_num)));
+            }
+            let offset = 3 * frame_num;
+            let num_cells = if frame_num == 1 { 1 } else { 3 };
+
+            for i in 1..(1 + num_cells) {
+                let name = format!("Cell {}", i + offset);
+                let voltage = rdr.read_u16::<BigEndian>().unwrap() as f64 / 1000.;
+                let m = BMS
+                    .lock()
+                    .unwrap()
+                    .entities
+                    .get(&name)
+                    .unwrap()
+                    .update_msg(serde_json::to_vec(&voltage).unwrap());
+                mqtt_tx.send(m).await?;
+            }
         }
         0x96 => {
             let _ = rdr.read_u8().unwrap();
@@ -522,13 +606,16 @@ async fn do_mqtt(
 }
 
 async fn do_serial(serial_port: String) -> Result<()> {
-    let mut port = tokio_serial::new(&serial_port, 9600).open_native_async()?;
+    let mut port = tokio_serial::new(&serial_port, 9600)
+        .open_native_async()
+        .with_context(|| format!("failed to open serial port {}", serial_port))?;
     port.set_exclusive(false)
         .with_context(|| format!("failed to set exclusive"))?;
     let mut reader = DalyMsg.framed(port);
 
     let (tx, mut rx) = mpsc::channel(32);
     tx.send(make_req(0x90, 0)).await?;
+    tx.send(make_req(0x95, 0)).await?;
     tx.send(make_req(0x93, 0)).await?;
     tx.send(make_req(0x96, 0)).await?;
 
@@ -541,7 +628,9 @@ async fn do_serial(serial_port: String) -> Result<()> {
             msg = reader.next() => {
                 if let Some(msg) = msg {
                     let msg = msg.expect("Failed to read line");
-                    parse_msg(msg).await?;
+                    if let Err(e) = parse_msg(msg).await {
+                        error!("handle message error: {:?}", e);
+                    }
                 } else {
                     break;
                 }
@@ -569,10 +658,12 @@ async fn do_serial(serial_port: String) -> Result<()> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+    env_logger::init();
     let args = Args::parse();
 
     let (tx, rx) = mpsc::channel(32);
     BMS.lock().unwrap().mqtt_tx = Some(tx);
+    info!("starting daly mqtt");
 
     let mut set = JoinSet::new();
     set.spawn(do_mqtt(
