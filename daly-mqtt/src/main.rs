@@ -54,7 +54,7 @@ impl Default for MqttDeviceMessage {
             identifiers: vec!["6402".to_string()],
             manufacturer: "homelab".to_string(),
             model: "mqtt-rust".to_string(),
-            name: "daly mqtt".to_string(),
+            name: "BMS".to_string(),
         }
     }
 }
@@ -76,13 +76,14 @@ struct DalyBms {
     current: MqttEntity,
     voltage: MqttEntity,
     rem_ah: MqttEntity,
+    temperature: MqttEntity,
     tx: Option<mpsc::Sender<(String, Vec<u8>)>>,
 }
 
 lazy_static! {
     static ref BMS: Arc<Mutex<DalyBms>> = Arc::new(Mutex::new(DalyBms {
         soc: MqttEntity {
-            name: "Battery Level".to_string(),
+            name: "Level".to_string(),
             component_type: "sensor".to_string(),
             object_id: "soc".to_string(),
             state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
@@ -96,18 +97,25 @@ lazy_static! {
             unit: Some("Ah".to_string()),
         },
         voltage: MqttEntity {
-            name: "Battery Voltage".to_string(),
+            name: "Voltage".to_string(),
             component_type: "sensor".to_string(),
             object_id: "voltage".to_string(),
             state_topic: format!("homeassistant/sensor/daly-mqtt/voltage"),
             unit: Some("V".to_string()),
         },
         current: MqttEntity {
-            name: "Battery Current".to_string(),
+            name: "Current".to_string(),
             component_type: "sensor".to_string(),
             object_id: "current".to_string(),
             state_topic: format!("homeassistant/sensor/daly-mqtt/current"),
             unit: Some("A".to_string()),
+        },
+        temperature: MqttEntity {
+            name: "Temperature".to_string(),
+            component_type: "sensor".to_string(),
+            object_id: "temperature".to_string(),
+            state_topic: format!("homeassistant/sensor/daly-mqtt/temperature"),
+            unit: Some("°C".to_string()),
         },
         tx: None,
     }));
@@ -167,6 +175,11 @@ async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
         .publish(&topic, QoS::AtLeastOnce, false, msg)
         .await
         .unwrap();
+    let (topic, msg) = BMS.lock().unwrap().temperature.discovery_msg();
+    client
+        .publish(&topic, QoS::AtLeastOnce, false, msg)
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -212,19 +225,6 @@ async fn handle_notification(notification: &Event, client: &AsyncClient) -> anyh
     };
     Ok(())
 }
-
-//   request_message[0] = 0xA5;         // Start Flag
-//   request_message[1] = this->addr_;  // Communication Module Address
-//   request_message[2] = data_id;      // Data ID
-//   request_message[3] = 0x08;         // Data Length (Fixed)
-//   request_message[4] = 0x00;         // Empty Data
-//   request_message[5] = 0x00;         //     |
-//   request_message[6] = 0x00;         //     |
-//   request_message[7] = 0x00;         //     |
-//   request_message[8] = 0x00;         //     |
-//   request_message[9] = 0x00;         //     |
-//   request_message[10] = 0x00;        //     |
-//   request_message[11] = 0x00;        // Empty Data
 
 struct DalyMsg;
 
@@ -317,6 +317,16 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
 
             println!("mos status, ah: {ah}, life: {bms_life}");
         }
+        0x96 => {
+            let _ = rdr.read_u8().unwrap();
+            let temperature = rdr.read_u8().unwrap() as f64 - 40.;
+            let m = BMS
+                .lock()
+                .unwrap()
+                .temperature
+                .update_msg(serde_json::Value::from(temperature));
+            tx.send(m).await?;
+        }
         _ => {}
     }
     Ok(())
@@ -380,6 +390,7 @@ async fn do_serial(serial_port: String) -> Result<()> {
     let (tx, mut rx) = mpsc::channel(32);
     tx.send(make_req(0x90)).await?;
     tx.send(make_req(0x93)).await?;
+    tx.send(make_req(0x96)).await?;
 
     loop {
         tokio::time::sleep(Duration::from_millis(100)).await;
