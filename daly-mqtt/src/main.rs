@@ -509,9 +509,9 @@ async fn do_serial(serial_port: String) -> Result<()> {
     println!("starting serial read");
 
     let (tx, mut rx) = mpsc::channel(32);
-    // tx.send(make_req(0x90, 0)).await?;
+    tx.send(make_req(0x90, 0)).await?;
     tx.send(make_req(0x93, 0)).await?;
-    // tx.send(make_req(0x96, 0)).await?;
+    tx.send(make_req(0x96, 0)).await?;
 
     let (command_tx, mut command_rx) = mpsc::channel::<Bytes>(32);
     BMS.lock().unwrap().uart_tx = Some(command_tx);
