@@ -74,6 +74,8 @@ struct MqttDiscoveryMessage {
 struct DalyBms {
     soc: MqttEntity,
     current: MqttEntity,
+    voltage: MqttEntity,
+    rem_ah: MqttEntity,
     tx: Option<mpsc::Sender<(String, Vec<u8>)>>,
 }
 
@@ -85,6 +87,20 @@ lazy_static! {
             object_id: "soc".to_string(),
             state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
             unit: Some("%".to_string()),
+        },
+        rem_ah: MqttEntity {
+            name: "Remaining Capacity".to_string(),
+            component_type: "sensor".to_string(),
+            object_id: "rem_ah".to_string(),
+            state_topic: format!("homeassistant/sensor/daly-mqtt/rem_ah"),
+            unit: Some("Ah".to_string()),
+        },
+        voltage: MqttEntity {
+            name: "Battery Voltage".to_string(),
+            component_type: "sensor".to_string(),
+            object_id: "voltage".to_string(),
+            state_topic: format!("homeassistant/sensor/daly-mqtt/voltage"),
+            unit: Some("V".to_string()),
         },
         current: MqttEntity {
             name: "Battery Current".to_string(),
@@ -128,29 +144,6 @@ impl MqttEntity {
 
 const HA_STATUS_TOPIC: &str = "homeassistant/status";
 const MQTT_COMMAND: &str = "homeassistant/light/photo-frame/set";
-const MQTT_STATE_TEMPLATE: &str = "homeassistant/light/photo-frame/state";
-const MQTT_STATE: &str = "homeassistant/light/photo-frame/state";
-const MQTT_DISCOVERY: &str = "homeassistant/light/photo-frame/config";
-const DISCOVERY_CONFIG: &str = r#"
-{
-   "name":"Photo Frame",
-   "command_topic":"homeassistant/light/photo-frame/set",
-   "state_topic":"homeassistant/light/photo-frame/state",
-   "unique_id":"photo_frame_9813",
-   "origin": {
-     "name":"photo-frame",
-     "sw": "0.1"
-   },
-   "device":{
-      "identifiers":[
-         "9813"
-      ],
-      "manufacturer": "home",
-      "model": "PIPI",
-      "name":"Pi"
-   }
-}
-"#;
 
 // Sends out the mqtt discovery messages
 async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
@@ -160,6 +153,16 @@ async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
         .await
         .unwrap();
     let (topic, msg) = BMS.lock().unwrap().current.discovery_msg();
+    client
+        .publish(&topic, QoS::AtLeastOnce, false, msg)
+        .await
+        .unwrap();
+    let (topic, msg) = BMS.lock().unwrap().rem_ah.discovery_msg();
+    client
+        .publish(&topic, QoS::AtLeastOnce, false, msg)
+        .await
+        .unwrap();
+    let (topic, msg) = BMS.lock().unwrap().voltage.discovery_msg();
     client
         .publish(&topic, QoS::AtLeastOnce, false, msg)
         .await
@@ -210,7 +213,6 @@ async fn handle_notification(notification: &Event, client: &AsyncClient) -> anyh
     Ok(())
 }
 
-struct DalyReq {}
 //   request_message[0] = 0xA5;         // Start Flag
 //   request_message[1] = this->addr_;  // Communication Module Address
 //   request_message[2] = data_id;      // Data ID
@@ -272,9 +274,16 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
     match msg[2] {
         0x90 => {
             let cum_volts = rdr.read_u16::<BigEndian>().unwrap() as f64 / 10.;
-            let _ = rdr.read_u16::<BigEndian>().unwrap();
-            let current = (rdr.read_u16::<BigEndian>().unwrap() as f64 - 30000.) / 10.;
+            let m = BMS
+                .lock()
+                .unwrap()
+                .voltage
+                .update_msg(serde_json::Value::from(cum_volts));
+            tx.send(m).await?;
 
+            let _ = rdr.read_u16::<BigEndian>().unwrap();
+
+            let current = (rdr.read_u16::<BigEndian>().unwrap() as f64 - 30000.) / 10.;
             let m = BMS
                 .lock()
                 .unwrap()
@@ -297,7 +306,15 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let charge_mos = rdr.read_u8().unwrap();
             let discharge_mos = rdr.read_u8().unwrap();
             let bms_life = rdr.read_u8().unwrap();
+
             let ah = rdr.read_u32::<BigEndian>().unwrap() as f64 / 1000.;
+            let m = BMS
+                .lock()
+                .unwrap()
+                .rem_ah
+                .update_msg(serde_json::Value::from(ah));
+            tx.send(m).await?;
+
             println!("mos status, ah: {ah}, life: {bms_life}");
         }
         _ => {}
