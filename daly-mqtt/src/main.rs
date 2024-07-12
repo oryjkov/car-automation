@@ -73,74 +73,21 @@ struct MqttDiscoveryMessage {
     origin: MqttOriginMessage,
     device: MqttDeviceMessage,
 }
+
+type RcEntity = Arc<MqttEntity>;
 struct DalyBms {
-    soc: MqttEntity,
-    current: MqttEntity,
-    voltage: MqttEntity,
-    rem_ah: MqttEntity,
-    temperature: MqttEntity,
-    charge_mos: MqttEntity,
-    discharge_mos: MqttEntity,
+    entities: HashMap<String, RcEntity>,
+
     mqtt_tx: Option<mpsc::Sender<(String, Vec<u8>)>>,
     uart_tx: Option<mpsc::Sender<Bytes>>,
 
-    command_to_entity: HashMap<String, u8>,
+    command_topic_to_entity: HashMap<String, RcEntity>,
+    command_to_entity: HashMap<u8, String>,
 }
 
 lazy_static! {
-    static ref BMS: Arc<Mutex<DalyBms>> = Arc::new(Mutex::new(DalyBms {
-        soc: MqttEntity {
-            name: "Level".to_string(),
-            component_type: "sensor".to_string(),
-            object_id: "soc".to_string(),
-            state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
-            unit: Some("%".to_string()),
-            command: None,
-        },
-        rem_ah: MqttEntity {
-            name: "Remaining Capacity".to_string(),
-            component_type: "sensor".to_string(),
-            object_id: "rem_ah".to_string(),
-            state_topic: format!("homeassistant/sensor/daly-mqtt/rem_ah"),
-            unit: Some("Ah".to_string()),
-            command: None,
-        },
-        voltage: MqttEntity {
-            name: "Voltage".to_string(),
-            component_type: "sensor".to_string(),
-            object_id: "voltage".to_string(),
-            state_topic: format!("homeassistant/sensor/daly-mqtt/voltage"),
-            unit: Some("V".to_string()),
-            command: None,
-        },
-        current: MqttEntity {
-            name: "Current".to_string(),
-            component_type: "sensor".to_string(),
-            object_id: "current".to_string(),
-            state_topic: format!("homeassistant/sensor/daly-mqtt/current"),
-            unit: Some("A".to_string()),
-            command: None,
-        },
-        temperature: MqttEntity {
-            name: "Temperature".to_string(),
-            component_type: "sensor".to_string(),
-            object_id: "temperature".to_string(),
-            state_topic: format!("homeassistant/sensor/daly-mqtt/temperature"),
-            unit: Some("°C".to_string()),
-            command: None,
-        },
-        charge_mos: MqttEntity {
-            name: "Charging MOS".to_string(),
-            component_type: "light".to_string(),
-            object_id: "charging_mos".to_string(),
-            state_topic: format!("homeassistant/light/daly-mqtt/charging_mos"),
-            unit: None,
-            command: Some(CommandStruct {
-                topic: format!("homeassistant/light/daly-mqtt/set-charging-mos"),
-                uart_cmd: 0xDA,
-            })
-        },
-        discharge_mos: MqttEntity {
+    static ref BMS: Arc<Mutex<DalyBms>> = {
+        let discharge_mos = Arc::new(MqttEntity {
             name: "Discharging MOS".to_string(),
             component_type: "light".to_string(),
             object_id: "discharging_mos".to_string(),
@@ -149,12 +96,98 @@ lazy_static! {
             command: Some(CommandStruct {
                 topic: format!("homeassistant/light/daly-mqtt/set-discharging-mos"),
                 uart_cmd: 0xD9,
-            })
-        },
-        mqtt_tx: None,
-        uart_tx: None,
-        command_to_entity: HashMap::new(),
-    }));
+            }),
+        });
+        let charge_mos = Arc::new(MqttEntity {
+            name: "Charging MOS".to_string(),
+            component_type: "light".to_string(),
+            object_id: "charging_mos".to_string(),
+            state_topic: format!("homeassistant/light/daly-mqtt/charging_mos"),
+            unit: None,
+            command: Some(CommandStruct {
+                topic: format!("homeassistant/light/daly-mqtt/set-charging-mos"),
+                uart_cmd: 0xDA,
+            }),
+        });
+
+        let entities = vec![
+            (
+                "soc".to_string(),
+                Arc::new(MqttEntity {
+                    name: "Level".to_string(),
+                    component_type: "sensor".to_string(),
+                    object_id: "soc".to_string(),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
+                    unit: Some("%".to_string()),
+                    command: None,
+                }),
+            ),
+            (
+                "rem_ah".to_string(),
+                Arc::new(MqttEntity {
+                    name: "Remaining Capacity".to_string(),
+                    component_type: "sensor".to_string(),
+                    object_id: "rem_ah".to_string(),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/rem_ah"),
+                    unit: Some("Ah".to_string()),
+                    command: None,
+                }),
+            ),
+            (
+                "voltage".to_string(),
+                Arc::new(MqttEntity {
+                    name: "Voltage".to_string(),
+                    component_type: "sensor".to_string(),
+                    object_id: "voltage".to_string(),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/voltage"),
+                    unit: Some("V".to_string()),
+                    command: None,
+                }),
+            ),
+            (
+                "current".to_string(),
+                Arc::new(MqttEntity {
+                    name: "Current".to_string(),
+                    component_type: "sensor".to_string(),
+                    object_id: "current".to_string(),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/current"),
+                    unit: Some("A".to_string()),
+                    command: None,
+                }),
+            ),
+            (
+                "temperature".to_string(),
+                Arc::new(MqttEntity {
+                    name: "Temperature".to_string(),
+                    component_type: "sensor".to_string(),
+                    object_id: "temperature".to_string(),
+                    state_topic: format!("homeassistant/sensor/daly-mqtt/temperature"),
+                    unit: Some("°C".to_string()),
+                    command: None,
+                }),
+            ),
+            ("charge_mos".to_string(), charge_mos.clone()),
+            ("discharge_mos".to_string(), discharge_mos.clone()),
+        ];
+        let mut command_topic_to_entity = HashMap::new();
+        let mut command_to_entity = HashMap::new();
+        let mut entity_to_command = HashMap::new();
+        for (id, e) in &entities {
+            if let Some(c) = e.command.clone() {
+                command_to_entity.insert(c.uart_cmd, id.clone());
+                command_topic_to_entity.insert(c.topic, e.clone());
+                entity_to_command.insert(id.clone(), c.uart_cmd);
+            }
+        }
+
+        Arc::new(Mutex::new(DalyBms {
+            entities: entities.into_iter().collect(),
+            mqtt_tx: None,
+            uart_tx: None,
+            command_to_entity,
+            command_topic_to_entity,
+        }))
+    };
 }
 
 #[derive(Clone)]
@@ -198,63 +231,34 @@ const HA_STATUS_TOPIC: &str = "homeassistant/status";
 
 // Sends out the mqtt discovery messages
 async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
-    let (topic, msg) = BMS.lock().unwrap().soc.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let (topic, msg) = BMS.lock().unwrap().current.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let (topic, msg) = BMS.lock().unwrap().rem_ah.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let (topic, msg) = BMS.lock().unwrap().voltage.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let (topic, msg) = BMS.lock().unwrap().temperature.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-
-    let (topic, msg) = BMS.lock().unwrap().charge_mos.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let command_struct = BMS.lock().unwrap().charge_mos.command.clone();
-    if let Some(command) = command_struct {
+    let d: Vec<_> = BMS
+        .lock()
+        .unwrap()
+        .entities
+        .iter()
+        .map(|(_, e)| e.discovery_msg())
+        .collect();
+    for (topic, msg) in d {
         client
-            .subscribe(&command.topic, QoS::AtMostOnce)
+            .publish(&topic, QoS::AtLeastOnce, false, msg)
             .await
-            .with_context(|| format!("MQTT subscribe failed"))?;
-        BMS.lock()
-            .unwrap()
-            .command_to_entity
-            .insert(command.topic, command.uart_cmd);
+            .unwrap();
     }
-    let (topic, msg) = BMS.lock().unwrap().discharge_mos.discovery_msg();
-    client
-        .publish(&topic, QoS::AtLeastOnce, false, msg)
-        .await
-        .unwrap();
-    let command_struct = BMS.lock().unwrap().discharge_mos.command.clone();
-    if let Some(command) = command_struct {
-        client
-            .subscribe(&command.topic, QoS::AtMostOnce)
-            .await
-            .with_context(|| format!("MQTT subscribe failed"))?;
-        BMS.lock()
-            .unwrap()
-            .command_to_entity
-            .insert(command.topic, command.uart_cmd);
+
+    let d: Vec<_> = BMS
+        .lock()
+        .unwrap()
+        .entities
+        .iter()
+        .map(|(_, e)| e.command.clone())
+        .collect();
+    for command_struct in d {
+        if let Some(command) = command_struct {
+            client
+                .subscribe(&command.topic, QoS::AtMostOnce)
+                .await
+                .with_context(|| format!("MQTT subscribe failed"))?;
+        }
     }
     Ok(())
 }
@@ -276,16 +280,16 @@ async fn handle_notification(notification: &Event, client: &AsyncClient) -> anyh
                     let x = BMS
                         .lock()
                         .unwrap()
-                        .command_to_entity
+                        .command_topic_to_entity
                         .get(&p.topic)
-                        .map(|x| *x);
+                        .map(|x| x.clone());
                     if let Some(entity) = x {
                         let arg = match message {
                             "OFF" => 0,
                             "ON" => 1,
                             _ => return Err(anyhow!(format!("unexpected command: {}", message))),
                         };
-                        let req = make_req(entity, arg);
+                        let req = make_req(entity.command.as_ref().unwrap().uart_cmd, arg);
                         let tx = BMS.lock().unwrap().uart_tx.as_ref().unwrap().clone();
                         tx.send(req).await?;
                     } else {
@@ -355,7 +359,9 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let m = BMS
                 .lock()
                 .unwrap()
-                .voltage
+                .entities
+                .get("voltage")
+                .unwrap()
                 .update_msg(serde_json::to_vec(&cum_volts).unwrap());
             mqtt_tx.send(m).await?;
 
@@ -365,7 +371,9 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let m = BMS
                 .lock()
                 .unwrap()
-                .current
+                .entities
+                .get("current")
+                .unwrap()
                 .update_msg(serde_json::to_vec(&current).unwrap());
             mqtt_tx.send(m).await?;
 
@@ -373,7 +381,9 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let m = BMS
                 .lock()
                 .unwrap()
-                .soc
+                .entities
+                .get("soc")
+                .unwrap()
                 .update_msg(serde_json::to_vec(&soc).unwrap());
             mqtt_tx.send(m).await?;
         }
@@ -385,7 +395,13 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             } else {
                 b"ON"[..].to_vec()
             };
-            let m = BMS.lock().unwrap().charge_mos.update_msg(charge_mos);
+            let m = BMS
+                .lock()
+                .unwrap()
+                .entities
+                .get("charge_mos")
+                .unwrap()
+                .update_msg(charge_mos);
             mqtt_tx.send(m).await?;
 
             let discharge_mos = if rdr.read_u8().unwrap() == 0 {
@@ -393,7 +409,13 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             } else {
                 b"ON"[..].to_vec()
             };
-            let m = BMS.lock().unwrap().discharge_mos.update_msg(discharge_mos);
+            let m = BMS
+                .lock()
+                .unwrap()
+                .entities
+                .get("discharge_mos")
+                .unwrap()
+                .update_msg(discharge_mos);
             mqtt_tx.send(m).await?;
 
             let _bms_life = rdr.read_u8().unwrap();
@@ -402,7 +424,9 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let m = BMS
                 .lock()
                 .unwrap()
-                .rem_ah
+                .entities
+                .get("rem_ah")
+                .unwrap()
                 .update_msg(serde_json::to_vec(&ah).unwrap());
             mqtt_tx.send(m).await?;
         }
@@ -412,34 +436,40 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             let m = BMS
                 .lock()
                 .unwrap()
-                .temperature
+                .entities
+                .get("temperature")
+                .unwrap()
                 .update_msg(serde_json::to_vec(&temperature).unwrap());
             mqtt_tx.send(m).await?;
         }
-        0xD9 => {
-            let dis_charge_mos = if rdr.read_u8().unwrap() == 0 {
-                b"OFF"[..].to_vec()
+        cmd_b => {
+            let maybe_e = BMS
+                .lock()
+                .unwrap()
+                .command_to_entity
+                .get(&cmd_b)
+                .map(|x| x.clone());
+            if let Some(e) = maybe_e {
+                let status = if rdr.read_u8().unwrap() == 0 {
+                    b"OFF"[..].to_vec()
+                } else {
+                    b"ON"[..].to_vec()
+                };
+                let m = BMS
+                    .lock()
+                    .unwrap()
+                    .entities
+                    .get(&e)
+                    .unwrap()
+                    .update_msg(status);
+                mqtt_tx.send(m).await?;
             } else {
-                b"ON"[..].to_vec()
-            };
-            let m = BMS.lock().unwrap().discharge_mos.update_msg(dis_charge_mos);
-            mqtt_tx.send(m).await?;
-        }
-        0xDA => {
-            let charge_mos = if rdr.read_u8().unwrap() == 0 {
-                b"OFF"[..].to_vec()
-            } else {
-                b"ON"[..].to_vec()
-            };
-            let m = BMS.lock().unwrap().charge_mos.update_msg(charge_mos);
-            mqtt_tx.send(m).await?;
-        }
-        _ => {
-            return Err(anyhow!(format!(
-                "unknown message: 0x{:0X}, {:X?}",
-                msg[2],
-                msg.to_vec()
-            )));
+                return Err(anyhow!(format!(
+                    "unknown message: 0x{:0X}, {:X?}",
+                    msg[2],
+                    msg.to_vec()
+                )));
+            }
         }
     }
     Ok(())
