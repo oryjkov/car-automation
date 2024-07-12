@@ -10,6 +10,7 @@ use std::io::Cursor;
 use std::io::{self};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_serial::SerialPortBuilderExt;
 use tokio_util::codec::{Decoder, Encoder};
@@ -73,6 +74,7 @@ struct MqttDiscoveryMessage {
 struct DalyBms {
     soc: MqttEntity,
     current: MqttEntity,
+    tx: Option<mpsc::Sender<(String, Vec<u8>)>>,
 }
 
 lazy_static! {
@@ -81,16 +83,17 @@ lazy_static! {
             name: "Battery Level".to_string(),
             component_type: "sensor".to_string(),
             object_id: "soc".to_string(),
-            state_topic: "TODO".to_string(),
+            state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
             unit: Some("%".to_string()),
         },
         current: MqttEntity {
             name: "Battery Current".to_string(),
             component_type: "sensor".to_string(),
             object_id: "current".to_string(),
-            state_topic: "TODO".to_string(),
+            state_topic: format!("homeassistant/sensor/daly-mqtt/current"),
             unit: Some("A".to_string()),
-        }
+        },
+        tx: None,
     }));
 }
 
@@ -117,6 +120,9 @@ impl MqttEntity {
             ..Default::default()
         };
         (topic, serde_json::to_vec(&d).unwrap())
+    }
+    fn update_msg(&self, val: serde_json::Value) -> (String, Vec<u8>) {
+        (self.state_topic.clone(), serde_json::to_vec(&val).unwrap())
     }
 }
 
@@ -252,7 +258,7 @@ fn make_req(cmd: u8) -> Bytes {
     b.freeze()
 }
 
-fn parse_msg(msg: Bytes) -> Result<()> {
+async fn parse_msg(msg: Bytes) -> Result<()> {
     println!("got {:?}", msg);
     let cksum = msg[0..12].iter().fold(0u8, |a, b| a.wrapping_add(*b));
     if cksum != msg[12] {
@@ -261,13 +267,29 @@ fn parse_msg(msg: Bytes) -> Result<()> {
             cksum, msg[12]
         )));
     }
+    let tx = BMS.lock().unwrap().tx.clone().unwrap();
     let mut rdr = Cursor::new(&msg[4..]);
     match msg[2] {
         0x90 => {
             let cum_volts = rdr.read_u16::<BigEndian>().unwrap() as f64 / 10.;
             let _ = rdr.read_u16::<BigEndian>().unwrap();
             let current = (rdr.read_u16::<BigEndian>().unwrap() as f64 - 30000.) / 10.;
+
+            let m = BMS
+                .lock()
+                .unwrap()
+                .current
+                .update_msg(serde_json::Value::from(current));
+            tx.send(m).await?;
+
             let soc = rdr.read_u16::<BigEndian>().unwrap() as f64 / 10.;
+            let m = BMS
+                .lock()
+                .unwrap()
+                .soc
+                .update_msg(serde_json::Value::from(soc));
+            tx.send(m).await?;
+
             println!("SOC, cum_volts: {cum_volts}, current: {current}, soc: {soc}");
         }
         0x93 => {
@@ -275,15 +297,20 @@ fn parse_msg(msg: Bytes) -> Result<()> {
             let charge_mos = rdr.read_u8().unwrap();
             let discharge_mos = rdr.read_u8().unwrap();
             let bms_life = rdr.read_u8().unwrap();
-            let mah = rdr.read_u32::<BigEndian>().unwrap() as f64 / 1000.;
-            println!("mos status, mah: {mah}, life: {bms_life}");
+            let ah = rdr.read_u32::<BigEndian>().unwrap() as f64 / 1000.;
+            println!("mos status, ah: {ah}, life: {bms_life}");
         }
         _ => {}
     }
     Ok(())
 }
 
-async fn do_mqtt(host: String, port: u16, client_id: String) -> Result<()> {
+async fn do_mqtt(
+    mut rx: mpsc::Receiver<(String, Vec<u8>)>,
+    host: String,
+    port: u16,
+    client_id: String,
+) -> Result<()> {
     let mut mqttoptions = MqttOptions::new(&client_id, &host, port);
     mqttoptions.set_keep_alive(Duration::from_secs(60));
 
@@ -301,13 +328,29 @@ async fn do_mqtt(host: String, port: u16, client_id: String) -> Result<()> {
         .await
         .with_context(|| format!("failed to send MQTT discover"))?;
 
-    loop {
-        let notification = eventloop.poll().await.unwrap();
-        let r = handle_notification(&notification, &client).await;
-        if r.is_err() {
-            println!("handle notification failed with {:?}", r);
+    let c = client.clone();
+    let mut set: JoinSet<Result<()>> = JoinSet::new();
+    set.spawn(async move {
+        while let Some((topic, msg)) = rx.recv().await {
+            c.publish(&topic, QoS::AtLeastOnce, false, msg).await?;
         }
+        Ok(())
+    });
+
+    set.spawn(async move {
+        loop {
+            let notification = eventloop.poll().await?;
+            let r = handle_notification(&notification, &client).await;
+            if r.is_err() {
+                println!("handle notification failed with {:?}", r);
+            }
+        }
+    });
+
+    while let Some(res) = set.join_next().await {
+        res??;
     }
+    Ok(())
 }
 
 async fn do_serial(serial_port: String) -> Result<()> {
@@ -317,14 +360,33 @@ async fn do_serial(serial_port: String) -> Result<()> {
     let mut reader = DalyMsg.framed(port);
     println!("starting serial read");
 
-    let b = make_req(0x90);
-    println!("will send {} bytes: {:?}", b.len(), b);
-    reader.send(b).await?;
+    let (tx, mut rx) = mpsc::channel(32);
+    tx.send(make_req(0x90)).await?;
+    tx.send(make_req(0x93)).await?;
 
-    while let Some(line_result) = reader.next().await {
-        let msg = line_result.expect("Failed to read line");
-        parse_msg(msg)?;
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::select! {
+            msg = reader.next() => {
+                if let Some(msg) = msg {
+                    let msg = msg.expect("Failed to read line");
+                    parse_msg(msg).await?;
+                } else {
+                    break;
+                }
+            }
+            _ =  tokio::time::sleep(Duration::from_secs(3)) => {
+                if let Some(b) = rx.recv().await {
+                    println!("will send {} bytes: {:?}", b.len(), b);
+                    reader.send(b.clone()).await?;
+                    tx.send(b).await?;
+                } else {
+                    break;
+                }
+            }
+        }
     }
+
     Ok(())
 }
 
@@ -332,8 +394,16 @@ async fn do_serial(serial_port: String) -> Result<()> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    let (tx, rx) = mpsc::channel(32);
+    BMS.lock().unwrap().tx = Some(tx);
+
     let mut set = JoinSet::new();
-    set.spawn(do_mqtt(args.mqtt_host, args.mqtt_port, args.mqtt_client_id));
+    set.spawn(do_mqtt(
+        rx,
+        args.mqtt_host,
+        args.mqtt_port,
+        args.mqtt_client_id,
+    ));
     set.spawn(do_serial(args.serial_port.clone()));
     while let Some(res) = set.join_next().await {
         res??;
