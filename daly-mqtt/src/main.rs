@@ -68,7 +68,9 @@ struct MqttDiscoveryMessage {
     command_topic: Option<String>,
     state_topic: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    unit_of_measuremenmt: Option<String>,
+    unit_of_measurement: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_class: Option<String>,
     unique_id: String,
     origin: MqttOriginMessage,
     device: MqttDeviceMessage,
@@ -89,23 +91,25 @@ lazy_static! {
     static ref BMS: Arc<Mutex<DalyBms>> = {
         let discharge_mos = Arc::new(MqttEntity {
             name: "Discharging MOS".to_string(),
-            component_type: "light".to_string(),
+            component_type: "switch".to_string(),
             object_id: "discharging_mos".to_string(),
-            state_topic: format!("homeassistant/light/daly-mqtt/discharging_mos"),
+            state_topic: format!("homeassistant/switch/daly-mqtt/discharging_mos"),
+            device_class: Some("outlet".to_string()),
             unit: None,
             command: Some(CommandStruct {
-                topic: format!("homeassistant/light/daly-mqtt/set-discharging-mos"),
+                topic: format!("homeassistant/switch/daly-mqtt/set-discharging-mos"),
                 uart_cmd: 0xD9,
             }),
         });
         let charge_mos = Arc::new(MqttEntity {
             name: "Charging MOS".to_string(),
-            component_type: "light".to_string(),
+            component_type: "switch".to_string(),
             object_id: "charging_mos".to_string(),
-            state_topic: format!("homeassistant/light/daly-mqtt/charging_mos"),
+            device_class: Some("outlet".to_string()),
+            state_topic: format!("homeassistant/switch/daly-mqtt/charging_mos"),
             unit: None,
             command: Some(CommandStruct {
-                topic: format!("homeassistant/light/daly-mqtt/set-charging-mos"),
+                topic: format!("homeassistant/switch/daly-mqtt/set-charging-mos"),
                 uart_cmd: 0xDA,
             }),
         });
@@ -120,6 +124,7 @@ lazy_static! {
                     state_topic: format!("homeassistant/sensor/daly-mqtt/soc"),
                     unit: Some("%".to_string()),
                     command: None,
+                    device_class: Some("battery".to_string()),
                 }),
             ),
             (
@@ -131,6 +136,7 @@ lazy_static! {
                     state_topic: format!("homeassistant/sensor/daly-mqtt/rem_ah"),
                     unit: Some("Ah".to_string()),
                     command: None,
+                    device_class: None,
                 }),
             ),
             (
@@ -141,6 +147,7 @@ lazy_static! {
                     object_id: "voltage".to_string(),
                     state_topic: format!("homeassistant/sensor/daly-mqtt/voltage"),
                     unit: Some("V".to_string()),
+                    device_class: Some("voltage".to_string()),
                     command: None,
                 }),
             ),
@@ -152,6 +159,7 @@ lazy_static! {
                     object_id: "current".to_string(),
                     state_topic: format!("homeassistant/sensor/daly-mqtt/current"),
                     unit: Some("A".to_string()),
+                    device_class: Some("current".to_string()),
                     command: None,
                 }),
             ),
@@ -163,6 +171,7 @@ lazy_static! {
                     object_id: "temperature".to_string(),
                     state_topic: format!("homeassistant/sensor/daly-mqtt/temperature"),
                     unit: Some("°C".to_string()),
+                    device_class: Some("temperature".to_string()),
                     command: None,
                 }),
             ),
@@ -176,6 +185,7 @@ lazy_static! {
                     name: format!("Cell {} Voltage", i),
                     component_type: "sensor".to_string(),
                     object_id: format!("cell-{}-voltage", i),
+                    device_class: Some("voltage".to_string()),
                     state_topic: format!("homeassistant/sensor/daly-mqtt/cell-{}-voltage", i),
                     unit: Some("V".to_string()),
                     command: None,
@@ -215,6 +225,7 @@ struct MqttEntity {
     object_id: String,
     state_topic: String,
     unit: Option<String>,
+    device_class: Option<String>,
     command: Option<CommandStruct>,
 }
 
@@ -228,7 +239,8 @@ impl MqttEntity {
         let d = MqttDiscoveryMessage {
             name: self.name.clone(),
             state_topic: self.state_topic.clone(),
-            unit_of_measuremenmt: self.unit.clone(),
+            unit_of_measurement: self.unit.clone(),
+            device_class: self.device_class.clone(),
             unique_id: format!("daly-mqtt-{}", self.object_id),
             command_topic: self.command.as_ref().map(|x| x.topic.clone()),
             ..Default::default()
@@ -343,55 +355,6 @@ impl Encoder<Bytes> for DalyMsg {
         info!("out\t{:02X?}", item.to_vec());
         dst.put(item);
         Ok(())
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_decode() {
-        let mut d = DalyMsg;
-        let mut b: BytesMut = (&[
-            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
-        ][..])
-            .into();
-        let c = b.clone();
-        let r = d.decode(&mut b).unwrap().unwrap();
-        assert!(b.is_empty());
-        assert_eq!(c, r);
-    }
-
-    #[test]
-    fn test_decode_two() {
-        let mut d = DalyMsg;
-        let mut b: BytesMut = (&[
-            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D, // 1
-            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
-        ][..])
-            .into();
-        let c = b.clone();
-        let r = d.decode(&mut b).unwrap().unwrap();
-        assert_eq!(b.len(), 13);
-        assert_eq!(c[0..13], r);
-
-        let r = d.decode(&mut b).unwrap().unwrap();
-        assert!(b.is_empty());
-        assert_eq!(c[13..], r);
-    }
-    #[test]
-    fn test_decode_messy() {
-        let mut d = DalyMsg;
-        let mut b: BytesMut = (&[
-            0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x7D, // not full
-            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
-        ][..])
-            .into();
-        let c = b.clone();
-        let r = d.decode(&mut b).unwrap().unwrap();
-        assert!(b.is_empty());
-        assert_eq!(c[12..], r);
     }
 }
 
@@ -678,4 +641,54 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decode() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c, r);
+    }
+
+    #[test]
+    fn test_decode_two() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0xA5, 0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D, // 1
+            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert_eq!(b.len(), 13);
+        assert_eq!(c[0..13], r);
+
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c[13..], r);
+    }
+    #[test]
+    fn test_decode_messy() {
+        let mut d = DalyMsg;
+        let mut b: BytesMut = (&[
+            0x40, 0x90, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x7D, // not full
+            0xA5, 0x40, 0x93, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7D,
+        ][..])
+            .into();
+        let c = b.clone();
+        let r = d.decode(&mut b).unwrap().unwrap();
+        assert!(b.is_empty());
+        assert_eq!(c[12..], r);
+    }
 }
