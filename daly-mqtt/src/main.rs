@@ -490,10 +490,6 @@ async fn do_mqtt(
         .await
         .with_context(|| format!("MQTT subscribe failed"))?;
 
-    discover(&client)
-        .await
-        .with_context(|| format!("failed to send MQTT discover"))?;
-
     let c = client.clone();
     let mut set: JoinSet<Result<()>> = JoinSet::new();
     set.spawn(async move {
@@ -501,6 +497,12 @@ async fn do_mqtt(
             c.publish(&topic, QoS::AtLeastOnce, false, msg).await?;
         }
         Ok(())
+    });
+    let c = client.clone();
+    set.spawn(async move {
+        discover(&c)
+            .await
+            .with_context(|| format!("failed to send MQTT discover"))
     });
 
     set.spawn(async move {
