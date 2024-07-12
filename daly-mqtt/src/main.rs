@@ -4,6 +4,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::Parser;
 use futures::{stream::StreamExt, SinkExt};
 use lazy_static::lazy_static;
+use log::{debug, info, warn};
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -261,16 +262,14 @@ async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
 // Handles MQTT notifications from HA.
 async fn handle_notification(notification: &Event, client: &AsyncClient) -> anyhow::Result<()> {
     match &notification {
-        Event::Outgoing(_) => {
-            //println!("Received outgoing = {:?}", n);
-        }
+        Event::Outgoing(_) => {}
         Event::Incoming(inc) => match inc {
             Packet::Publish(p) => {
                 let message = std::str::from_utf8(&p.payload)
                     .with_context(|| format!("MQTT message is not utf8"))?;
                 if p.topic == HA_STATUS_TOPIC {
                     if message == "online" {
-                        println!("re-discovering");
+                        info!("re-discovering");
                         discover(&client).await?;
                     }
                 } else {
@@ -282,31 +281,20 @@ async fn handle_notification(notification: &Event, client: &AsyncClient) -> anyh
                         .map(|x| *x);
                     if let Some(entity) = x {
                         let arg = match message {
-                            "OFF" => {
-                                println!("should turn off");
-                                0
-                                //do_ctrl(false, &uhubctl).await?;
-                            }
-                            "ON" => {
-                                println!("should turn on");
-                                1
-                                // do_ctrl(true, &uhubctl).await?;
-                            }
-                            _ => {
-                                println!("unexpected command: {}", message);
-                                return Ok(());
-                            }
+                            "OFF" => 0,
+                            "ON" => 1,
+                            _ => return Err(anyhow!(format!("unexpected command: {}", message))),
                         };
                         let req = make_req(entity, arg);
                         let tx = BMS.lock().unwrap().uart_tx.as_ref().unwrap().clone();
                         tx.send(req).await?;
                     } else {
-                        println!("message payload: {}", message);
+                        return Err(anyhow!(format!("message on unknown topic: {}", message)));
                     }
                 }
             }
             _ => {
-                //println!("Received = {:?}", notification);
+                debug!("Received {:?}", notification);
             }
         },
     };
@@ -334,7 +322,7 @@ impl Encoder<Bytes> for DalyMsg {
     type Error = io::Error;
 
     fn encode(&mut self, item: Bytes, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        println!("out\t{:02X?}", item.to_vec());
+        info!("out\t{:02X?}", item.to_vec());
         dst.put(item);
         Ok(())
     }
@@ -351,7 +339,7 @@ fn make_req(cmd: u8, arg1: u8) -> Bytes {
 }
 
 async fn parse_msg(msg: Bytes) -> Result<()> {
-    println!("in\t{:02X?}", msg.to_vec());
+    info!("in\t{:02X?}", msg.to_vec());
     let cksum = msg[0..12].iter().fold(0u8, |a, b| a.wrapping_add(*b));
     if cksum != msg[12] {
         return Err(anyhow!(format!(
@@ -388,8 +376,6 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
                 .soc
                 .update_msg(serde_json::to_vec(&soc).unwrap());
             mqtt_tx.send(m).await?;
-
-            // println!("SOC, cum_volts: {cum_volts}, current: {current}, soc: {soc}");
         }
         0x93 => {
             let _state = rdr.read_u8().unwrap();
@@ -419,8 +405,6 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
                 .rem_ah
                 .update_msg(serde_json::to_vec(&ah).unwrap());
             mqtt_tx.send(m).await?;
-
-            // println!("mos status: {charge_mos}, ah: {ah}, life: {bms_life}");
         }
         0x96 => {
             let _ = rdr.read_u8().unwrap();
@@ -451,7 +435,11 @@ async fn parse_msg(msg: Bytes) -> Result<()> {
             mqtt_tx.send(m).await?;
         }
         _ => {
-            println!("unknown message: 0x{:0X}, {:X?}", msg[2], msg.to_vec());
+            return Err(anyhow!(format!(
+                "unknown message: 0x{:0X}, {:X?}",
+                msg[2],
+                msg.to_vec()
+            )));
         }
     }
     Ok(())
@@ -490,7 +478,7 @@ async fn do_mqtt(
             let notification = eventloop.poll().await?;
             let r = handle_notification(&notification, &client).await;
             if r.is_err() {
-                println!("handle notification failed with {:?}", r);
+                warn!("handle notification failed with {:?}", r);
             }
         }
     });
@@ -506,7 +494,6 @@ async fn do_serial(serial_port: String) -> Result<()> {
     port.set_exclusive(false)
         .with_context(|| format!("failed to set exclusive"))?;
     let mut reader = DalyMsg.framed(port);
-    println!("starting serial read");
 
     let (tx, mut rx) = mpsc::channel(32);
     tx.send(make_req(0x90, 0)).await?;
