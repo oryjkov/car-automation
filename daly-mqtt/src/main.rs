@@ -70,35 +70,53 @@ struct MqttDiscoveryMessage {
     origin: MqttOriginMessage,
     device: MqttDeviceMessage,
 }
-struct MqttEntity {
-    name: String,
-    state_topic: String,
-    unit: Option<String>,
-}
-
 struct DalyBms {
     soc: MqttEntity,
+    current: MqttEntity,
 }
 
 lazy_static! {
     static ref BMS: Arc<Mutex<DalyBms>> = Arc::new(Mutex::new(DalyBms {
         soc: MqttEntity {
             name: "Battery Level".to_string(),
+            component_type: "sensor".to_string(),
+            object_id: "soc".to_string(),
             state_topic: "TODO".to_string(),
             unit: Some("%".to_string()),
+        },
+        current: MqttEntity {
+            name: "Battery Current".to_string(),
+            component_type: "sensor".to_string(),
+            object_id: "current".to_string(),
+            state_topic: "TODO".to_string(),
+            unit: Some("A".to_string()),
         }
     }));
 }
 
+struct MqttEntity {
+    name: String,
+    component_type: String,
+    object_id: String,
+    state_topic: String,
+    unit: Option<String>,
+}
+
 impl MqttEntity {
-    fn discovery_msg(&self) -> Vec<u8> {
+    fn discovery_msg(&self) -> (String, Vec<u8>) {
+        // MQTT discovery message topic: <discovery_prefix>/<component>/[<node_id>/]<object_id>/config
+        let topic = format!(
+            "homeassistant/{}/{}/config",
+            self.component_type, self.object_id
+        );
         let d = MqttDiscoveryMessage {
             name: self.name.clone(),
             state_topic: self.state_topic.clone(),
             unit_of_measuremenmt: self.unit.clone(),
+            unique_id: format!("daly-mqtt-{}", self.object_id),
             ..Default::default()
         };
-        serde_json::to_vec(&d).unwrap()
+        (topic, serde_json::to_vec(&d).unwrap())
     }
 }
 
@@ -130,9 +148,14 @@ const DISCOVERY_CONFIG: &str = r#"
 
 // Sends out the mqtt discovery messages
 async fn discover(client: &AsyncClient) -> anyhow::Result<()> {
-    let m = BMS.lock().unwrap().soc.discovery_msg();
+    let (topic, msg) = BMS.lock().unwrap().soc.discovery_msg();
     client
-        .publish(MQTT_DISCOVERY, QoS::AtLeastOnce, false, m)
+        .publish(&topic, QoS::AtLeastOnce, false, msg)
+        .await
+        .unwrap();
+    let (topic, msg) = BMS.lock().unwrap().current.discovery_msg();
+    client
+        .publish(&topic, QoS::AtLeastOnce, false, msg)
         .await
         .unwrap();
     Ok(())
